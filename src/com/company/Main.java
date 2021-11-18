@@ -1,6 +1,5 @@
 package com.company;
 
-import com.sun.media.jfxmediaimpl.HostUtils;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
@@ -83,6 +82,7 @@ public class Main extends Application {
     public static double[] cameraPos = {0,0,0};
     public static double[] cameraAngle = {0,0};
     public static double cameraAngleXtoY = 0;
+    public static double gameFade = 0;
     public String focusedWindow = "Main menu";
     public double lastWidth = 0;
     public double lastHeight;
@@ -90,7 +90,7 @@ public class Main extends Application {
     public CustomImage[] buttonList;
     public File mapToLoad = null;
     public static boolean mapLoaded = false;
-    public static boolean pinkLines = false;
+    public static boolean debugMode = false;
     public static Text debugText;
     public boolean mouseInBounds = false;
 
@@ -269,7 +269,7 @@ public class Main extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
-        double gameFade = 0;
+        boolean transitioning = false;
 
         Canvas canvas = new Canvas(resolutionWidth, resolutionHeight);
         GraphicsContext gc = canvas.getGraphicsContext2D();
@@ -297,7 +297,7 @@ public class Main extends Application {
 
         CustomText title = new CustomText(TITLE, 300);
         title.text.setFont(javafx.scene.text.Font.font("Monospaced", FontWeight.BOLD,130));
-        title.text.setFill(javafx.scene.paint.Color.LIMEGREEN);
+        title.text.setFill(Color.LIMEGREEN);
         Background boxesBackground = new Background(new BackgroundImage(background, BackgroundRepeat.NO_REPEAT, BackgroundRepeat.NO_REPEAT, BackgroundPosition.CENTER, new BackgroundSize((resolutionHeight / background.getHeight()), (resolutionWidth / background.getWidth()), true, true, false, false)));
 
         CustomImage mainMenuButton = new CustomImage(mainMenu, resolutionHeight + 200, 0, 1, -200);
@@ -331,6 +331,9 @@ public class Main extends Application {
             if(e.getCode() == KeyCode.F3){
                 debugMode();
             }
+            if(e.getCode() == KeyCode.ESCAPE){
+                paused = !paused;
+            }
             screenshot(gameScene, e);
         });
         gameScene.setOnKeyReleased(this::keyReleased);
@@ -349,7 +352,7 @@ public class Main extends Application {
         mapSelectBox.setBackground(boxesBackground);
         debugText = new Text(0, 15, "No information available yet");
         pane.getChildren().add(debugText);
-        debugText.setOpacity(0);
+        pane.setStyle("-fx-background-color: #000000;");
         Scene mapSelectScene = new Scene(mapSelectBox, resolutionWidth, resolutionHeight);
         mapSelectButton.imageView.setOnMouseClicked(e -> focusedWindow = MAP_SELECT);
         optionsButton.imageView.setOnMouseClicked(e -> focusedWindow = OPTIONS);
@@ -457,12 +460,22 @@ public class Main extends Application {
                                     primaryStage.setWidth(lastWidth);
                                     primaryStage.setHeight(lastHeight);
                                 }
-                                if(mouseInBounds){
-                                    gameMouse(primaryStage);
+                                if(mouseInBounds && !paused){
                                     if(gameScene.getCursor() != Cursor.NONE){
                                         gameScene.setCursor(Cursor.NONE);
                                     }
                                 }
+                                if(paused){
+                                    if(gameScene.getCursor() == Cursor.NONE){
+                                        gameScene.setCursor(Cursor.DEFAULT);
+                                    }
+                                }
+                                if(paused && gameFade < 90){
+                                    gameFade += 5;
+                                }else if(!paused && gameFade > 0){
+                                    gameFade -= 5;
+                                }
+                                canvas.setOpacity(1 - (Math.sin(Math.toRadians(gameFade) * 0.5)));
                             }else{
                                 if(gameScene.getCursor() == Cursor.NONE){
                                     gameScene.setCursor(Cursor.DEFAULT);
@@ -483,6 +496,12 @@ public class Main extends Application {
                                 testMap.hoverAnimDown();
                             }
                             testMap.select();
+                            if(paused){
+                                debugText.setText("|PAUSED|");
+                                debugText.setFill(Color.SILVER);
+                            }else{
+                                debugText.setFill(Color.BLACK);
+                            }
                         }
                 ),
                 new KeyFrame(Duration.seconds(1.0 / targetFPS))
@@ -498,12 +517,7 @@ public class Main extends Application {
     }
 
     public void debugMode(){
-        pinkLines = !pinkLines;
-        if(debugText.getOpacity() == 0){
-            debugText.setOpacity(1);
-        }else{
-            debugText.setOpacity(0);
-        }
+        debugMode = !debugMode;
     }
 
     public static void exit(){
@@ -515,25 +529,31 @@ public class Main extends Application {
         double[][] pointsToUse = new double[2][4];
         double blueBrightness;
         double[] blueRGB = new double[3];
-        javafx.scene.paint.Color variableBlue;
+        Color variableBlue;
         gc.clearRect(0,0,canvasWidth,canvasHeight);
         gc.setFill(Color.GRAY);
         gc.fillRect(0,0,canvasWidth,canvasHeight);
+        boolean inFrontOfCamera;
         Quad currentQuad;
-        if(pinkLines){
+        if(debugMode){
             for (int i = 0; i < quadCount; i++) {
+                inFrontOfCamera = false;
                 currentQuad = world.get(i);
+                if(currentQuad.centreOfQuad[2] > 0){
+                    inFrontOfCamera = true;
+                }
                 for (int j = 0; j < 4; j++) {
-                    gc.setStroke(Color.DEEPPINK);
-                    gc.strokeLine(0, currentQuad.pointsOnScreen[j][1] + (resolutionHeight / 2.0), canvasWidth, currentQuad.pointsOnScreen[j][1] + (resolutionHeight / 2.0));
-                    gc.strokeLine(currentQuad.pointsOnScreen[j][0] + (resolutionWidth / 2.0), 0, currentQuad.pointsOnScreen[j][0] + (resolutionWidth / 2.0), canvasHeight);
-                    gc.setFill(Color.YELLOW);
-                    gc.fillRect(currentQuad.pointsOnScreen[j][0] - 5 + (resolutionWidth / 2.0), currentQuad.pointsOnScreen[j][1] - 5 + (resolutionHeight / 2.0), 10, 10);
+                    if(inFrontOfCamera){
+                        gc.setStroke(Color.DEEPPINK);
+                        gc.strokeLine(0, currentQuad.pointsOnScreen[j][1] + (resolutionHeight / 2.0), canvasWidth, currentQuad.pointsOnScreen[j][1] + (resolutionHeight / 2.0));
+                        gc.strokeLine(currentQuad.pointsOnScreen[j][0] + (resolutionWidth / 2.0), 0, currentQuad.pointsOnScreen[j][0] + (resolutionWidth / 2.0), canvasHeight);
+                        gc.setFill(Color.YELLOW);
+                        gc.fillRect(currentQuad.pointsOnScreen[j][0] - 5 + (resolutionWidth / 2.0), currentQuad.pointsOnScreen[j][1] - 5 + (resolutionHeight / 2.0), 10, 10);
+                    }
                 }
             }
         }
 
-        boolean inFrontOfCamera;
         String debugInfo;
         for (int i = 0; i < quadCount; i++) {
             inFrontOfCamera = false;
@@ -560,7 +580,8 @@ public class Main extends Application {
                     }
                 }
             }
-            debugInfo = "(" + Math.round(currentQuad.pointsOnScreen[0][0]) + ", " + Math.round(currentQuad.pointsOnScreen[0][1]) + ") " +
+            debugInfo = "F3 - Debug mode. V" +
+                    "\n (" + Math.round(currentQuad.pointsOnScreen[0][0]) + ", " + Math.round(currentQuad.pointsOnScreen[0][1]) + ") " +
                     "\n (" + Math.round(currentQuad.pointsOnScreen[1][0]) + ", " + Math.round(currentQuad.pointsOnScreen[1][1]) + ") " +
                     "\n (" + Math.round(currentQuad.pointsOnScreen[2][0]) + ", " + Math.round(currentQuad.pointsOnScreen[2][1]) + ") " +
                     "\n (" + Math.round(currentQuad.pointsOnScreen[3][0]) + ", " + Math.round(currentQuad.pointsOnScreen[3][1]) + ") " +
@@ -570,10 +591,16 @@ public class Main extends Application {
                     "\n (" + Math.round(coordsT[2][0]) + ", " + Math.round(coordsT[2][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
                     "\n (" + Math.round(coordsT[3][0]) + ", " + Math.round(coordsT[3][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
                     "\n (" +  cameraAngle[0] + ", " + cameraAngle[1] + ")";
-            debugText.setText(debugInfo);
-            gc.setFill(variableBlue);
+            if(debugMode){
+                debugText.setText(debugInfo);
+            }else{
+                debugText.setText("F3 - Debug mode. >");
+            }
             if(inFrontOfCamera){
+                gc.setFill(variableBlue);
                 gc.fillPolygon(pointsToUse[0], pointsToUse[1], 4);
+                gc.setStroke(variableBlue);
+                gc.strokePolygon(pointsToUse[0], pointsToUse[1], 4);
             }
         }
     }
@@ -658,9 +685,9 @@ public class Main extends Application {
             for (int j = 0; j < 3; j++) {
                 centresOfShapes[i][j] = coordsTranslated[0][j] + ((coordsTranslated[2][j] - coordsTranslated[0][j]) / 2.0);
             }
-            distancesToCentres[i] = Math.sqrt(((centresOfShapes[i][0] + cameraPos[0]) * (centresOfShapes[i][0] + cameraPos[0]))
-                    + ((centresOfShapes[i][1] + cameraPos[1]) * (centresOfShapes[i][1] + cameraPos[1]))
-                    + ((centresOfShapes[i][2] + cameraPos[2]) * (centresOfShapes[i][2] + cameraPos[2])));
+            distancesToCentres[i] = Math.sqrt(((centresOfShapes[i][0]) * (centresOfShapes[i][0]))
+                    + ((centresOfShapes[i][1]) * (centresOfShapes[i][1]))
+                    + ((centresOfShapes[i][2]) * (centresOfShapes[i][2])));
             centreDZ = distanceToScreen / centresOfShapes[i][2];
             for (int j = 0; j < 2; j++) {
                 centresOnScreen[i][j] = centresOfShapes[i][j] * centreDZ;
@@ -674,6 +701,31 @@ public class Main extends Application {
             editQuad.setDistance(distancesToCentres[i]);
             world.set(i, editQuad);
         }
+
+        boolean sorted;
+        boolean[] checks = new boolean[world.size() - 1];
+        Quad tempQuad;
+        int pointer = 0;
+        do{
+            pointer++;
+            if(pointer == world.size()){
+                pointer = 1;
+            }
+            if(world.get(pointer - 1).distanceToCamera < world.get(pointer).distanceToCamera){
+                tempQuad = world.get(pointer - 1);
+                world.set(pointer - 1, world.get(pointer));
+                world.set(pointer, tempQuad);
+            }
+            checks[pointer - 1] = true;
+            sorted = true;
+            for (int i = 0; i < world.size() - 1; i++) {
+                if(!checks[i]){
+                    sorted = false;
+                    break;
+                }
+            }
+        }while(!sorted);
+
         draw(gc, canvasWidth, canvasHeight, DZConstant, coordsTranslated, distanceToScreen, distancesToPoints);
     }
 
@@ -710,14 +762,20 @@ public class Main extends Application {
     }
 
     private void mouseMoved(MouseEvent e, Stage stage){
+        mouseInBounds = (e.getScreenX() > stage.getX() && e.getScreenX() < stage.getX() + resolutionWidth)
+                && (e.getScreenY() > stage.getY() && e.getScreenY() < stage.getY() + resolutionHeight + 11);
+
+        if(mouseInBounds && !paused){
+            gameMouse(stage);
+        }
+
         cameraAngle[0] += (e.getX() - (resolutionWidth / 2.0)) / 8.0;
         double angleToAdd = -(e.getY() + 11 - (resolutionHeight / 2.0)) / 8.0;
         if(!((cameraAngle[1] >= 90 && angleToAdd > 0)
                 || (cameraAngle[1] <= -90 && angleToAdd < 0))){
             cameraAngle[1] += angleToAdd;
         }
-        mouseInBounds = (e.getScreenX() > stage.getX() && e.getScreenX() < stage.getX() + resolutionWidth)
-                && (e.getScreenY() > stage.getY() && e.getScreenY() < stage.getY() + resolutionHeight + 11);
+
 
         if(cameraAngle[1] > 90){
             cameraAngle[1] = 90;
