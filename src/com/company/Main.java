@@ -3,6 +3,7 @@ package com.company;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
+import javafx.concurrent.Task;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -18,6 +19,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
@@ -32,7 +34,9 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
 
 public class Main extends Application {
 
@@ -46,7 +50,8 @@ public class Main extends Application {
     public static final String ANSI_PURPLE = "\u001B[35m";
     public static final String ANSI_CYAN = "\u001B[36m";
     public static final String ANSI_WHITE = "\u001B[37m";
-    public static final String TITLE = "Bocks";
+
+    public static final String TITLE = "_";
     public static final String MAIN_MENU = "Main menu";
     public static final String MAP_SELECT = "Map select";
     public static final String OPTIONS = "Options";
@@ -55,8 +60,8 @@ public class Main extends Application {
     public static final String R_WORLD = "World";
     public static final String R_OBJECTS = "Objects";
     public static final String R_LIGHTS = "Lights";
-    public static final int buttonSpeed = 15;
 
+    public static int buttonSpeed = 15;
     public static boolean running = false;
     public static boolean paused = true;
     public static int targetFPS = 60;
@@ -81,7 +86,6 @@ public class Main extends Application {
     public static double[] cameraDeltaLeftRight = {0,0,0};
     public static double[] cameraPos = {0,0,0};
     public static double[] cameraAngle = {0,0};
-    public static double cameraAngleXtoY = 0;
     public static double gameFade = 0;
     public String focusedWindow = "Main menu";
     public double lastWidth = 0;
@@ -92,14 +96,95 @@ public class Main extends Application {
     public static boolean mapLoaded = false;
     public static boolean debugMode = false;
     public static Text debugText;
+    public static Text loadingText = new Text("Loading:");
+    public static Text loadingContext = new Text();
     public boolean mouseInBounds = false;
+    public static boolean loading = false;
+    public static ImageView loadingBar;
+    public static ImageView emptyLoadingBar;
+    public int loadsFadeOut = 0;
+    public static int loadingBarAnimTheta = 0;
+    public static boolean fakeLoadingTime = false;
+    public static boolean editMode = false;
+    public static boolean leftMouseHeld = false;
+    public static boolean rightMouseHeld = false;
+    public static boolean[] draggingArrow = {false,false,false};
+    public static double[] mouseMovement = {0,0};
+    public static String arrowInfo = null;
+
+    public static Quad[] axisArrows = {
+            new Quad(-1, new double[][]{
+                    {0.5, 0.05, 0},
+                    {0.5, -0.05, 0},
+                    {2, -0.05, 0},
+                    {2, 0.05, 0}
+            }, null, null, null, 0, Color.color(1.0, 0.0, 0.0), new int[]{0, 0}, true),
+            new Quad(-2, new double[][]{
+                    {2, 0.1, 0},
+                    {2, 0, 0},
+                    {2, -0.1, 0},
+                    {2.1, 0, 0}
+            }, null, null, null, 0, Color.color(1.0, 0.0, 0.0), new int[]{0, 0}, true),
+            new Quad(-3, new double[][]{
+                    {0.05, 0.5, 0},
+                    {-0.05, 0.5, 0},
+                    {-0.05, 2, 0},
+                    {0.05, 2, 0}
+            }, null, null, null, 0, Color.color(0.0, 1.0, 0.0), new int[]{0, 0}, true),
+            new Quad(-4, new double[][]{
+                    {0.1, 2, 0},
+                    {0, 2, 0},
+                    {-0.1, 2, 0},
+                    {0, 2.1, 0}
+            }, null, null, null, 0, Color.color(0.0, 1.0, 0.0), new int[]{0, 0}, true),
+            new Quad(-5, new double[][]{
+                    {0, 0.05, 0.5},
+                    {0, -0.05, 0.5},
+                    {0, -0.05, 2},
+                    {0, 0.05, 2}
+            }, null, null, null, 0, Color.color(0.0, 0.0, 1.0), new int[]{0, 0}, true),
+            new Quad(-6, new double[][]{
+                    {0, 0.1, 2},
+                    {0, 0, 2},
+                    {0, -0.1, 2},
+                    {0, 0, 2.1}
+            }, null, null, null, 0, Color.color(0.0, 0.0, 1.0), new int[]{0, 0}, true)
+    };
+
+
+    public static void updateProgressBar(int loadedElements, int elementsToLoad){
+        double progress = (double) loadedElements / (double) elementsToLoad;
+        loadingBar.setScaleX(progress);
+        double fullBarWidth = loadingBar.getImage().getWidth();
+        loadingBar.setTranslateX(fullBarWidth * progress * 0.47 - fullBarWidth * 0.5 + 15);
+    }
+
+    public static void updateLoadingContext(String text){
+        loadingContext.setText(text);
+    }
+
+    public static void loadingBarAnimation(){
+        loadingBarAnimTheta += 5;
+        if(loadingBarAnimTheta >= 180){
+            loadingBarAnimTheta = 0;
+        }
+        loadingBar.setTranslateX(0);
+        loadingBar.setScaleX(Math.sin(Math.toRadians(loadingBarAnimTheta)));
+    }
 
     public static void main(String[] args) {
         running = true;
         launch(args);
     }
 
-    private static void loadMap(File mapFile){
+    private static void loadMap(File mapFile) throws InterruptedException {
+        loading = true;
+        int linesRead = 0;
+        loadingText.setOpacity(1);
+        loadingContext.setOpacity(1);
+        emptyLoadingBar.setOpacity(1);
+        loadingBar.setScaleX(0);
+        loadingBar.setOpacity(1);
         BufferedReader reader;
         worldStrings = new ArrayList<>();
         objectStrings = new ArrayList<>();
@@ -110,12 +195,14 @@ public class Main extends Application {
         String readLine;
         int bracketNo = 0;
         boolean endLoop = false;
-
         String currentlyReading = "";
+        updateLoadingContext("Reading file...");
+
         try{
             reader = new BufferedReader(new FileReader(mapFile));
             do{
                 readLine = reader.readLine().trim();
+                loadingBarAnimation();
                 if(readLine.contains("<World>") || readLine.contains("<world>")){
                     currentlyReading = R_WORLD;
                 }else if(readLine.contains("<Objects>") || readLine.contains("<objects>")){
@@ -130,6 +217,10 @@ public class Main extends Application {
                 if(bracketNo == 3){
                     endLoop = true;
                 }
+                if(fakeLoadingTime){
+                    Thread.sleep(33);
+                }
+                loadingBarAnimation();
                 if(readLine.startsWith("[") && readLine.endsWith("]")){
                     switch (currentlyReading) {
                         case R_WORLD:
@@ -143,6 +234,11 @@ public class Main extends Application {
                             break;
                     }
                 }
+                linesRead++;
+                if(fakeLoadingTime){
+                    Thread.sleep(33);
+                }
+                loadingBarAnimation();
             }while(!endLoop);
         }catch(FileNotFoundException e){
             reportError("Error initialising the file reader to read the map.", e);
@@ -153,29 +249,41 @@ public class Main extends Application {
         quadCount = worldStrings.size();
         objectCount = objectStrings.size();
         lightCount = lightStrings.size();
+        int elementsToLoad = quadCount + objectCount + lightCount;
+        int loadedElements = 0;
         String[][] tempCoordinates;
         String[][][] coordinatesString;
+        String[] tempColourString;
 
         tempCoordinates = new String[quadCount][4];
         coordinates = new double[quadCount][4][3];
         coordinatesString = new String[quadCount][4][3];
+        loadingContext.setTranslateY(resolutionHeight / 2.4 + 39);
+        updateLoadingContext("Indexing world " +
+                "\n geometry.");
         for (int i = 0; i < quadCount; i++) {
             //pppfpfpfpfpfpfpfpfpffpfpfppfpfpfp
-            tempCoordinates[i] = worldStrings.get(i).split("/");
+            tempColourString = worldStrings.get(i).split("¦")[1].split(",");
+            tempCoordinates[i] = worldStrings.get(i).split("¦")[0].split("/");
             for (int j = 0; j < 4; j++) {
                 coordinatesString[i][j] = tempCoordinates[i][j].split(",");
                 for (int k = 0; k < 3; k++) {
                     coordinates[i][j][k] = Double.parseDouble(coordinatesString[i][j][k]);
                 }
             }
-            world.add(new Quad(i, coordinates[i], null, null, null, 0));
+            world.add(new Quad(i + 1, coordinates[i], null, null, null, 0, Color.color(Double.parseDouble(tempColourString[0]) / 255, Double.parseDouble(tempColourString[1]) / 255, Double.parseDouble(tempColourString[2]) / 255), new int[]{0, 0}, false));
+            if(fakeLoadingTime){
+                Thread.sleep(100);
+            }
+            loadedElements++;
+            updateProgressBar(loadedElements, elementsToLoad);
         }
 
         ArrayList<String>[] tempCoordsDynamic = new ArrayList[objectCount];
         ArrayList<double[]>[] coordsDynamic = new ArrayList[objectCount];
         ArrayList<String[]>[] coordsStringDynamic = new ArrayList[objectCount];
         String[] startPosString;
-
+        updateLoadingContext("Indexing objects.");
         for (int i = 0; i < objectCount; i++) {
             startPosString = objectStrings.get(i).split("¦")[1].split(",");
             tempCoordsDynamic[i] = new ArrayList<>(Arrays.asList(objectStrings.get(i).split("¦")[0].split("/")));
@@ -204,6 +312,11 @@ public class Main extends Application {
             vertices = coordsDynamic[i].toArray(vertices);
 
             objects.add(new Object(i, startPos, vertices));
+            if(fakeLoadingTime){
+                Thread.sleep(100);
+            }
+            loadedElements++;
+            updateProgressBar(loadedElements, elementsToLoad);
         }
 
         double[][] pos = new double[lightCount][3];
@@ -212,6 +325,7 @@ public class Main extends Application {
         double[] brightnesses = new double[lightCount];
         String[][] colourData = new String[lightCount][3];
         Color[] colours = new Color[lightCount];
+        updateLoadingContext("Indexing lights.");
         for (int i = 0; i < lightCount; i++) {
             lightData[i] = lightStrings.get(i).split("/");
             posString[i] = lightData[i][0].split(",");
@@ -220,12 +334,29 @@ public class Main extends Application {
             }
             brightnesses[i] = Double.parseDouble(lightData[i][1]);
             colourData[i] = lightData[i][2].split(",");
-            colours[i] = Color.color(Double.parseDouble(colourData[i][0]), Double.parseDouble(colourData[i][1]), Double.parseDouble(colourData[i][2]));
+            colours[i] = Color.color(Double.parseDouble(colourData[i][0]) / 255, Double.parseDouble(colourData[i][1]) / 255, Double.parseDouble(colourData[i][2]) / 255);
 
             lights.add(new Light(i, pos[i], brightnesses[i], colours[i]));
+            if(fakeLoadingTime){
+                Thread.sleep(100);
+            }
+            loadedElements++;
+            updateProgressBar(loadedElements, elementsToLoad);
         }
 
+        updateLoadingContext("Finished!");
+
         mapLoaded = true;
+        loading = false;
+    }
+
+    public static void unloadMap(){
+        mapLoaded = false;
+        world.clear();
+        objects.clear();
+        lights.clear();
+        cameraPos = new double[]{0,0,0};
+        cameraAngle = new double[]{0,0};
     }
 
     public static void reportError(String error, Exception e){
@@ -269,7 +400,6 @@ public class Main extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
-        boolean transitioning = false;
 
         Canvas canvas = new Canvas(resolutionWidth, resolutionHeight);
         GraphicsContext gc = canvas.getGraphicsContext2D();
@@ -294,23 +424,36 @@ public class Main extends Application {
         Image rightMapsBracketImage = new Image(new FileInputStream("resources/Right_Bracket.png"));
         Image defaultMapIcon = new Image(new FileInputStream("resources/Default_Map_Icon.png"));
         Image mapSelectBackgroundImage = new Image(new FileInputStream("resources/Map_Select_Background.png"));
+        Image emptyLoadingBarImage = new Image(new FileInputStream("resources/Empty_Loading_Bar.png"));
+        Image loadingBarImage = new Image(new FileInputStream("resources/Loading_JUICE.png"));
+
+        emptyLoadingBar = new ImageView(emptyLoadingBarImage);
+        loadingBar = new ImageView(loadingBarImage);
 
         CustomText title = new CustomText(TITLE, 300);
+        loadingText.setFont(javafx.scene.text.Font.font("Monospaced", FontWeight.BOLD,30));
+        loadingText.setFill(Color.WHITE);
+        loadingContext.setFont(javafx.scene.text.Font.font("Monospaced", FontWeight.BOLD,15));
+        loadingContext.setFill(Color.WHITE);
         title.text.setFont(javafx.scene.text.Font.font("Monospaced", FontWeight.BOLD,130));
         title.text.setFill(Color.LIMEGREEN);
         Background boxesBackground = new Background(new BackgroundImage(background, BackgroundRepeat.NO_REPEAT, BackgroundRepeat.NO_REPEAT, BackgroundPosition.CENTER, new BackgroundSize((resolutionHeight / background.getHeight()), (resolutionWidth / background.getWidth()), true, true, false, false)));
 
-        CustomImage mainMenuButton = new CustomImage(mainMenu, resolutionHeight + 200, 0, 1, -200);
-        CustomImage mapSelectButton = new CustomImage(mapSelect, resolutionHeight + 200, 0, 1, 0);
-        CustomImage optionsButton = new CustomImage(options, resolutionHeight + 200, 0, 1, 0);
-        CustomImage exitButton = new CustomImage(exit, resolutionHeight + 200, 0, 1, 0);
-        CustomImage startButton = new CustomImage(start, resolutionHeight + 200, 0, 1, 200);
-        CustomImage leftMapsBracket = new CustomImage(leftMapsBracketImage, resolutionHeight + 200, 0, 1, 0);
-        CustomImage rightMapsBracket = new CustomImage(rightMapsBracketImage, resolutionHeight + 200, 1100, 1, 0);
-        CustomImage mapSelectBackground = new CustomImage(mapSelectBackgroundImage, 0, 0, 0, 0);
+        CustomImage mainMenuButton = new CustomImage(mainMenu, resolutionHeight + 200, 0, 1, 0, -200, 1);
+        CustomImage mainMenuGameButton = new CustomImage(mainMenu, 0, 0, 0, 100, 200, 2);
+        CustomImage mapSelectButton = new CustomImage(mapSelect, resolutionHeight + 200, 0, 1, 0, 0, 1);
+        CustomImage optionsButton = new CustomImage(options, resolutionHeight + 200, 0, 1, 0, 0, 1);
+        CustomImage exitButton = new CustomImage(exit, resolutionHeight + 200, 0, 1, 0, 0, 1);
+        CustomImage startButton = new CustomImage(start, resolutionHeight + 200, 0, 1, 0, 200, 1);
+        CustomImage leftMapsBracket = new CustomImage(leftMapsBracketImage, resolutionHeight + 200, 0, 1, 0, 0, 1);
+        CustomImage rightMapsBracket = new CustomImage(rightMapsBracketImage, resolutionHeight + 200, 1100, 1, 0, 0, 1);
+        CustomImage leftMenuBracket = new CustomImage(leftMapsBracketImage, resolutionHeight + 200, 0, 1, 10, 10, 2);
+        CustomImage rightMenuBracket = new CustomImage(rightMapsBracketImage, resolutionHeight + 200, 1050, 1, 200, 10, 2);
+        CustomImage mapSelectBackground = new CustomImage(mapSelectBackgroundImage, resolutionHeight + 200, 0, 0, 0, 0, 1);
+        CustomImage gameMenuBackground = new CustomImage(mapSelectBackgroundImage, 0, 0, 0, 36, 11, 2);
 
         ListMap testMap = new ListMap("Test Map", "Just a test map.", "Used for...testing.", mapBase, mapBaseSelected, defaultMapIcon, "maps/testMap.mfb");
-        buttonList = new CustomImage[]{mainMenuButton, mapSelectButton, optionsButton, exitButton, startButton};
+        buttonList = new CustomImage[]{mainMenuButton, mapSelectButton, optionsButton, exitButton, startButton, mainMenuGameButton};
         maps = new ArrayList<>();
         maps.add(testMap);
 
@@ -332,24 +475,59 @@ public class Main extends Application {
                 debugMode();
             }
             if(e.getCode() == KeyCode.ESCAPE){
+                if(paused){
+                    focusedWindow = GAME;
+                }else{
+                    focusedWindow = GAME_MENU;
+                }
                 paused = !paused;
+            }
+            if(e.getCode() == KeyCode.E){
+                editMode = !editMode;
             }
             screenshot(gameScene, e);
         });
         gameScene.setOnKeyReleased(this::keyReleased);
         gameScene.setOnMouseMoved(e -> mouseMoved(e, primaryStage));
+        gameScene.setOnMouseDragged(e -> mouseMoved(e, primaryStage));
+        gameScene.setOnMousePressed(e -> {
+            if(e.getButton() == MouseButton.PRIMARY){
+                leftMouseHeld = true;
+            }
+            if(e.getButton() == MouseButton.SECONDARY){
+                rightMouseHeld = true;
+            }
+        });
+        gameScene.setOnMouseReleased(e -> {
+            if(e.getButton() == MouseButton.PRIMARY){
+                leftMouseHeld = false;
+            }
+            if(e.getButton() == MouseButton.SECONDARY){
+                rightMouseHeld = false;
+            }
+        });
 
         mapSelectBox.setPadding(new Insets(10));
         mapSelectBox.setHgap(10);
         mapSelectBox.setVgap(20);
         mapSelectBox.add(mapSelectBackground.imageView, 2, 0);
-        mapSelectBackground.imageView.setTranslateX(-517);
+        mapSelectBackground.imageView.setTranslateX(-603);
         mapSelectBox.add(leftMapsBracket.imageView,0,0);
         mapSelectBox.add(rightMapsBracket.imageView, 1, 0);
         mapSelectBox.add(mainMenuButton.imageView, 2, 0);
         mapSelectBox.add(startButton.imageView, 2, 0);
         mapSelectBox.add(testMap.map, 1, 0);
+        mapSelectBox.add(loadingText, 1,0);
+        mapSelectBox.add(loadingContext, 1, 0);
+        mapSelectBox.add(emptyLoadingBar, 1, 0);
+        mapSelectBox.add(loadingBar, 1, 0);
         mapSelectBox.setBackground(boxesBackground);
+
+        pane.getChildren().add(gameMenuBackground.imageView);
+        pane.getChildren().add(mainMenuGameButton.imageView);
+        pane.getChildren().add(leftMenuBracket.imageView);
+        pane.getChildren().add(rightMenuBracket.imageView);
+
         debugText = new Text(0, 15, "No information available yet");
         pane.getChildren().add(debugText);
         pane.setStyle("-fx-background-color: #000000;");
@@ -357,16 +535,29 @@ public class Main extends Application {
         mapSelectButton.imageView.setOnMouseClicked(e -> focusedWindow = MAP_SELECT);
         optionsButton.imageView.setOnMouseClicked(e -> focusedWindow = OPTIONS);
         mainMenuButton.imageView.setOnMouseClicked(e -> focusedWindow = MAIN_MENU);
+        mainMenuGameButton.imageView.setOnMouseClicked(e -> focusedWindow = MAIN_MENU);
         startButton.imageView.setOnMouseClicked(e -> {
             if(mapToLoad != null){
                 focusedWindow = GAME;
                 paused = false;
                 if(!mapLoaded){
-                    loadMap(mapToLoad);
+                    new Thread(new Task<Void>(){
+                        @Override
+                        protected Void call() throws Exception {
+                            loadingText.setOpacity(1);
+                            loadingContext.setOpacity(1);
+                            emptyLoadingBar.setOpacity(1);
+                            loadingBar.setScaleX(0);
+                            loadingBar.setOpacity(1);
+                            loadMap(mapToLoad);
+                            return null;
+                        }
+                    }).start();
                 }
             }
         });
         testMap.map.setOnMouseClicked(e -> selectMap(testMap));
+
         Alert alert = new Alert(Alert.AlertType.NONE, "REALLY exit?", ButtonType.YES, ButtonType.NO);
         alert.setTitle("Exit");
         exitButton.imageView.setOnMouseClicked(e -> {
@@ -381,16 +572,37 @@ public class Main extends Application {
         exitButton.imageView.setTranslateY(exitButton.distance);
         leftMapsBracket.imageView.setTranslateY(leftMapsBracket.distance);
         rightMapsBracket.imageView.setTranslateY(rightMapsBracket.distance);
-        mainMenuButton.imageView.setTranslateX(870);
-        startButton.imageView.setTranslateX(870);
+        mainMenuButton.imageView.setTranslateX(785);
+        startButton.imageView.setTranslateX(785);
+        mainMenuGameButton.imageView.setTranslateX(mainMenuGameButton.translateX);
+        mainMenuGameButton.imageView.setTranslateY(mainMenuGameButton.translateY);
+        gameMenuBackground.imageView.setTranslateX(gameMenuBackground.translateX);
+        gameMenuBackground.imageView.setTranslateY(gameMenuBackground.translateY);
+        leftMenuBracket.imageView.setTranslateX(leftMenuBracket.translateX);
+        leftMenuBracket.imageView.setTranslateY(leftMenuBracket.distance);
+        rightMenuBracket.imageView.setTranslateY(rightMenuBracket.distance);
+        rightMenuBracket.imageView.setTranslateX(rightMenuBracket.translateX);
+        loadingText.setTranslateX(-150);
+        loadingText.setTranslateY(resolutionHeight / 2.4);
+        loadingContext.setTranslateX(-150);
+        loadingContext.setTranslateY(resolutionHeight / 2.4 + 20);
+        emptyLoadingBar.setTranslateY(resolutionHeight / 2.4);
+        loadingBar.setTranslateX(0);
+        loadingBar.setTranslateY(resolutionHeight / 2.4);
+
+        loadingText.setOpacity(0);
+        loadingContext.setOpacity(0);
+        emptyLoadingBar.setOpacity(0);
+        loadingBar.setOpacity(0);
+
         Timeline renderTimeline = new Timeline(
                 new KeyFrame(
                         Duration.seconds(0),
                         event -> {
                             if(!paused && mapLoaded){
-                                render(gc, canvas.getWidth(), canvas.getHeight());
                                 checkKeys();
                                 cycleMovement();
+                                render(gc, canvas.getWidth(), canvas.getHeight());
                             }
 
                             if(focusedWindow.equals(MAIN_MENU) && !rightMapsBracket.transitioning){
@@ -398,6 +610,9 @@ public class Main extends Application {
                                 mapSelectButton.enterAnim();
                                 optionsButton.enterAnim();
                                 exitButton.enterAnim();
+                                if(mapLoaded){
+                                    unloadMap();
+                                }
                             }else{
                                 title.exitAnim();
                                 mapSelectButton.exitAnim();
@@ -410,6 +625,7 @@ public class Main extends Application {
                                 }else{
                                     startButton.changeImage(start);
                                 }
+
                                 leftMapsBracket.enterAnim();
                                 rightMapsBracket.enterAnim();
                                 mainMenuButton.enterAnim();
@@ -424,6 +640,15 @@ public class Main extends Application {
                             }else{
                                 testMap.exitAnim();
                                 mapSelectBackground.fadeOut();
+                                if(loadsFadeOut < 90 && mapLoaded){
+                                    loadsFadeOut += 2;
+                                }
+                                if(mapLoaded) {
+                                    loadingText.setOpacity(Math.sin(Math.toRadians(90 - loadsFadeOut)));
+                                    emptyLoadingBar.setOpacity(Math.sin(Math.toRadians(90 - loadsFadeOut)));
+                                    loadingBar.setOpacity(Math.sin(Math.toRadians(90 - loadsFadeOut)));
+                                    loadingContext.setOpacity(Math.sin(Math.toRadians(90 - loadsFadeOut)));
+                                }
                                 if(!testMap.transitioning){
                                     rightMapsBracket.moveBackRight();
                                     if(!rightMapsBracket.moving){
@@ -452,7 +677,7 @@ public class Main extends Application {
                                     primaryStage.setHeight(lastHeight);
                                 }
                             }
-                            if(focusedWindow.equals(GAME) && !(rightMapsBracket.transitioning || rightMapsBracket.moving || testMap.transitioning)){
+                            if(focusedWindow.equals(GAME) && !(rightMapsBracket.transitioning || rightMapsBracket.moving || testMap.transitioning) && mapLoaded){
                                 if(primaryStage.getScene() != gameScene){
                                     lastWidth = primaryStage.getWidth();
                                     lastHeight = primaryStage.getHeight();
@@ -470,17 +695,38 @@ public class Main extends Application {
                                         gameScene.setCursor(Cursor.DEFAULT);
                                     }
                                 }
-                                if(paused && gameFade < 90){
-                                    gameFade += 5;
-                                }else if(!paused && gameFade > 0){
-                                    gameFade -= 5;
-                                }
-                                canvas.setOpacity(1 - (Math.sin(Math.toRadians(gameFade) * 0.5)));
                             }else{
                                 if(gameScene.getCursor() == Cursor.NONE){
                                     gameScene.setCursor(Cursor.DEFAULT);
                                 }
                             }
+                            if(focusedWindow.equals(GAME_MENU)){
+                                leftMenuBracket.enterAnim();
+                                rightMenuBracket.enterAnim();
+                                if(!rightMenuBracket.transitioning){
+                                    rightMenuBracket.moveRight();
+                                    if(!rightMenuBracket.moving){
+                                        gameMenuBackground.fadeIn();
+                                        mainMenuGameButton.fadeIn();
+                                    }
+                                }
+                            }else{
+                                gameMenuBackground.fadeOut();
+                                mainMenuGameButton.fadeOut();
+                                if(!mainMenuGameButton.transitioning){
+                                    rightMenuBracket.moveBackRight();
+                                    if(!rightMenuBracket.moving){
+                                        leftMenuBracket.exitAnim();
+                                        rightMenuBracket.exitAnim();
+                                    }
+                                }
+                            }
+                            if(paused && gameFade < 90){
+                                gameFade += 5;
+                            }else if(!paused && gameFade > 0){
+                                gameFade -= 5;
+                            }
+                            canvas.setOpacity(1 - (Math.sin(Math.toRadians(gameFade) * 0.5)));
                             for (int i = 0; i < buttonList.length; i++) {
                                 if(!(buttonList[i] == startButton && mapToLoad == null)){
                                     if(buttonList[i].imageView.isHover()){
@@ -525,11 +771,22 @@ public class Main extends Application {
         System.exit(0);
     }
 
+    public static Quad findQuad(int ID){
+        Quad currentQuad;
+        for (int i = 0; i < world.size(); i++) {
+            currentQuad = world.get(i);
+            if(currentQuad.ID == ID){
+                return currentQuad;
+            }
+        }
+        return null;
+    }
+
     private static void draw(GraphicsContext gc, double canvasWidth, double canvasHeight, double DZ, double[][] coordsT, double distanceToScreen, double[][] distancesToPoints) {
         double[][] pointsToUse = new double[2][4];
-        double blueBrightness;
-        double[] blueRGB = new double[3];
-        Color variableBlue;
+        double colourBrightness;
+        double[] colourRGB = new double[3];
+        Color variableColour;
         gc.clearRect(0,0,canvasWidth,canvasHeight);
         gc.setFill(Color.GRAY);
         gc.fillRect(0,0,canvasWidth,canvasHeight);
@@ -539,68 +796,166 @@ public class Main extends Application {
             for (int i = 0; i < quadCount; i++) {
                 inFrontOfCamera = false;
                 currentQuad = world.get(i);
-                if(currentQuad.centreOfQuad[2] > 0){
-                    inFrontOfCamera = true;
-                }
-                for (int j = 0; j < 4; j++) {
-                    if(inFrontOfCamera){
-                        gc.setStroke(Color.DEEPPINK);
-                        gc.strokeLine(0, currentQuad.pointsOnScreen[j][1] + (resolutionHeight / 2.0), canvasWidth, currentQuad.pointsOnScreen[j][1] + (resolutionHeight / 2.0));
-                        gc.strokeLine(currentQuad.pointsOnScreen[j][0] + (resolutionWidth / 2.0), 0, currentQuad.pointsOnScreen[j][0] + (resolutionWidth / 2.0), canvasHeight);
-                        gc.setFill(Color.YELLOW);
-                        gc.fillRect(currentQuad.pointsOnScreen[j][0] - 5 + (resolutionWidth / 2.0), currentQuad.pointsOnScreen[j][1] - 5 + (resolutionHeight / 2.0), 10, 10);
+                if(!currentQuad.hidden){
+                    if(currentQuad.centreOfQuad[2] > 0){
+                        inFrontOfCamera = true;
+                    }
+                    for (int j = 0; j < 4; j++) {
+                        if(inFrontOfCamera){
+                            gc.setStroke(Color.DEEPPINK);
+                            gc.strokeLine(0, currentQuad.pointsOnScreen[j][1] + (resolutionHeight / 2.0), canvasWidth, currentQuad.pointsOnScreen[j][1] + (resolutionHeight / 2.0));
+                            gc.strokeLine(currentQuad.pointsOnScreen[j][0] + (resolutionWidth / 2.0), 0, currentQuad.pointsOnScreen[j][0] + (resolutionWidth / 2.0), canvasHeight);
+                            gc.setFill(Color.YELLOW);
+                            gc.fillRect(currentQuad.pointsOnScreen[j][0] - 5 + (resolutionWidth / 2.0), currentQuad.pointsOnScreen[j][1] - 5 + (resolutionHeight / 2.0), 10, 10);
+                        }
                     }
                 }
             }
         }
-
         String debugInfo;
+        String debugString;
         for (int i = 0; i < quadCount; i++) {
             inFrontOfCamera = false;
             currentQuad = world.get(i);
 
-            if(currentQuad.centreOfQuad[2] > 0){
-                inFrontOfCamera = true;
-            }
+            if(!currentQuad.hidden){
+                if(currentQuad.centreOfQuad[2] > 0){
+                    inFrontOfCamera = true;
+                }
 
-            blueBrightness = 5 / currentQuad.distanceToCamera;
-            if(blueBrightness > 1){
-                blueBrightness = 1;
-            }
-            blueRGB[0] = (70 * blueBrightness) / 255;
-            blueRGB[1] = (100 * blueBrightness) / 255;
-            blueRGB[2] = (255 * blueBrightness) / 255;
-            variableBlue = Color.color(blueRGB[0], blueRGB[1], blueRGB[2]);
-            for (int j = 0; j < 2; j++) {
-                for (int k = 0; k < 4; k++) {
-                    if(j == 0){
-                        pointsToUse[j][k] = currentQuad.pointsOnScreen[k][j] + (resolutionWidth / 2.0);
-                    }else{
-                        pointsToUse[j][k] = currentQuad.pointsOnScreen[k][j] + (resolutionHeight / 2.0);
+                colourBrightness = 5 / currentQuad.distanceToCamera;
+                if(colourBrightness > 1){
+                    colourBrightness = 1;
+                }
+                colourRGB[0] = currentQuad.colour.getRed() * colourBrightness;
+                colourRGB[1] = currentQuad.colour.getGreen() * colourBrightness;
+                colourRGB[2] = currentQuad.colour.getBlue() * colourBrightness;
+                variableColour = Color.color(colourRGB[0], colourRGB[1], colourRGB[2]);
+                for (int j = 0; j < 2; j++) {
+                    for (int k = 0; k < 4; k++) {
+                        if(j == 0){
+                            pointsToUse[j][k] = currentQuad.pointsOnScreen[k][j] + (resolutionWidth / 2.0);
+                        }else{
+                            pointsToUse[j][k] = currentQuad.pointsOnScreen[k][j] + (resolutionHeight / 2.0);
+                        }
+                    }
+                }
+                debugInfo = "F3 - Debug mode. V" +
+                        "\n (" + Math.round(currentQuad.pointsOnScreen[0][0]) + ", " + Math.round(currentQuad.pointsOnScreen[0][1]) + ") " +
+                        "\n (" + Math.round(currentQuad.pointsOnScreen[1][0]) + ", " + Math.round(currentQuad.pointsOnScreen[1][1]) + ") " +
+                        "\n (" + Math.round(currentQuad.pointsOnScreen[2][0]) + ", " + Math.round(currentQuad.pointsOnScreen[2][1]) + ") " +
+                        "\n (" + Math.round(currentQuad.pointsOnScreen[3][0]) + ", " + Math.round(currentQuad.pointsOnScreen[3][1]) + ") " +
+                        "\n DZ: " + DZ +
+                        "\n (" + Math.round(coordsT[0][0]) + ", " + Math.round(coordsT[0][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
+                        "\n (" + Math.round(coordsT[1][0]) + ", " + Math.round(coordsT[1][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
+                        "\n (" + Math.round(coordsT[2][0]) + ", " + Math.round(coordsT[2][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
+                        "\n (" + Math.round(coordsT[3][0]) + ", " + Math.round(coordsT[3][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
+                        "\n (" +  cameraAngle[0] + ", " + cameraAngle[1] + ") " +
+                        "\n {" + draggingArrow[0] + ", " + draggingArrow[1] + ", " + draggingArrow[2] + "}";
+                debugString = debugInfo;
+                if(debugMode){
+                    debugString = debugInfo + "\n \n" + arrowInfo;
+                    debugText.setText(debugString);
+                }else{
+                    debugText.setText("F3 - Debug mode. >");
+                }
+                gc.setStroke(Color.WHITE);
+                gc.strokeLine(resolutionWidth / 2.0, resolutionHeight / 2.0, resolutionWidth / 2.0, resolutionHeight / 2.0);
+                if(inFrontOfCamera){
+                    gc.setFill(variableColour);
+                    gc.fillPolygon(pointsToUse[0], pointsToUse[1], 4);
+                    gc.setStroke(variableColour);
+                    gc.strokePolygon(pointsToUse[0], pointsToUse[1], 4);
+
+                    for (int j = 0; j < 4; j++) {
+                        if(editMode){
+                            if(distancesToPoints[i][j] <= 30){
+                                // If statement condition to check if the centre of the screen is within a point's highlight box.
+                                if((currentQuad.pointsOnScreen[j][0] - 10 < 0 && currentQuad.pointsOnScreen[j][0] + 10 > 0)
+                                        && (currentQuad.pointsOnScreen[j][1] - 10 < 0 && currentQuad.pointsOnScreen[j][1] + 10 > 0)){
+                                    if(leftMouseHeld || currentQuad.selectedPoint == j + 1){
+                                        gc.setFill(Color.PURPLE);
+                                        currentQuad.selectedPoint = j + 1;
+                                    }else{
+                                        gc.setFill(Color.LIME);
+                                    }
+                                    world.set(i, currentQuad);
+                                }else{
+                                    if(currentQuad.selectedPoint == j + 1){
+                                        gc.setFill(Color.PURPLE);
+                                    }else{
+                                        gc.setFill(Color.YELLOW);
+                                    }
+                                    if(rightMouseHeld){
+                                        currentQuad.selectedPoint = 0;
+                                    }
+                                }
+                            }else{
+                                gc.setFill(Color.RED);
+                            }
+                            // Drawing method to highlight points.
+                            gc.fillRect(currentQuad.pointsOnScreen[j][0] - 10 + (resolutionWidth / 2.0), currentQuad.pointsOnScreen[j][1] - 10 + (resolutionHeight / 2.0), 20, 20);
+                        }else{
+                            currentQuad.selectedPoint = 0;
+                        }
                     }
                 }
             }
-            debugInfo = "F3 - Debug mode. V" +
-                    "\n (" + Math.round(currentQuad.pointsOnScreen[0][0]) + ", " + Math.round(currentQuad.pointsOnScreen[0][1]) + ") " +
-                    "\n (" + Math.round(currentQuad.pointsOnScreen[1][0]) + ", " + Math.round(currentQuad.pointsOnScreen[1][1]) + ") " +
-                    "\n (" + Math.round(currentQuad.pointsOnScreen[2][0]) + ", " + Math.round(currentQuad.pointsOnScreen[2][1]) + ") " +
-                    "\n (" + Math.round(currentQuad.pointsOnScreen[3][0]) + ", " + Math.round(currentQuad.pointsOnScreen[3][1]) + ") " +
-                    "\n DZ: " + DZ +
-                    "\n (" + Math.round(coordsT[0][0]) + ", " + Math.round(coordsT[0][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-                    "\n (" + Math.round(coordsT[1][0]) + ", " + Math.round(coordsT[1][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-                    "\n (" + Math.round(coordsT[2][0]) + ", " + Math.round(coordsT[2][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-                    "\n (" + Math.round(coordsT[3][0]) + ", " + Math.round(coordsT[3][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-                    "\n (" +  cameraAngle[0] + ", " + cameraAngle[1] + ")";
-            if(debugMode){
-                debugText.setText(debugInfo);
+        }
+        Quad aCurrentQuad;
+        Quad aOtherQuad;
+        boolean aInFrontOfCamera;
+        for (int i = 0; i < axisArrows.length; i++) {
+            aInFrontOfCamera = false;
+            aCurrentQuad = axisArrows[i];
+            if(i % 2 == 0){
+                aOtherQuad = axisArrows[i + 1];
             }else{
-                debugText.setText("F3 - Debug mode. >");
+                aOtherQuad = axisArrows[i - 1];
             }
-            if(inFrontOfCamera){
-                gc.setFill(variableBlue);
-                gc.fillPolygon(pointsToUse[0], pointsToUse[1], 4);
-                gc.setStroke(variableBlue);
-                gc.strokePolygon(pointsToUse[0], pointsToUse[1], 4);
+
+            if(!aCurrentQuad.hidden){
+                if(aCurrentQuad.centreOfQuad[2] > 0){
+                    aInFrontOfCamera = true;
+                }
+
+                colourBrightness = 5 / aCurrentQuad.distanceToCamera;
+                if(colourBrightness > 1){
+                    colourBrightness = 1;
+                }
+                colourRGB[0] = aCurrentQuad.colour.getRed() * colourBrightness;
+                colourRGB[1] = aCurrentQuad.colour.getGreen() * colourBrightness;
+                colourRGB[2] = aCurrentQuad.colour.getBlue() * colourBrightness;
+                variableColour = Color.color(colourRGB[0], colourRGB[1], colourRGB[2]);
+                if(Math.sqrt((aCurrentQuad.centreOfQuadOnScreen[0] * aCurrentQuad.centreOfQuadOnScreen[0] * 2) + (aCurrentQuad.centreOfQuadOnScreen[1] * aCurrentQuad.centreOfQuadOnScreen[1] * 2)) <= 100 * (15 / aCurrentQuad.distanceToCamera)
+                    || Math.sqrt((aOtherQuad.centreOfQuadOnScreen[0] * aOtherQuad.centreOfQuadOnScreen[0] * 2) + (aOtherQuad.centreOfQuadOnScreen[1] * aOtherQuad.centreOfQuadOnScreen[1] * 2)) <= 100 * (15 / aOtherQuad.distanceToCamera)){
+                    variableColour = variableColour.brighter().brighter().brighter();
+                    if(leftMouseHeld){
+                        variableColour = variableColour.invert();
+                        draggingArrow[(int) Math.round((i + 1) / 2.0) - 1] = true;
+                    }else{
+                        draggingArrow[(int) Math.round((i + 1) / 2.0) - 1] = false;
+                    }
+                }
+
+                for (int j = 0; j < 2; j++) {
+                    for (int k = 0; k < 4; k++) {
+                        if(j == 0){
+                            pointsToUse[j][k] = aCurrentQuad.pointsOnScreen[k][j] + (resolutionWidth / 2.0);
+                        }else{
+                            pointsToUse[j][k] = aCurrentQuad.pointsOnScreen[k][j] + (resolutionHeight / 2.0);
+                        }
+                    }
+                }
+
+                gc.setStroke(Color.WHITE);
+                gc.strokeLine(resolutionWidth / 2.0, resolutionHeight / 2.0, resolutionWidth / 2.0, resolutionHeight / 2.0);
+                if(aInFrontOfCamera){
+                    gc.setFill(variableColour);
+                    gc.fillPolygon(pointsToUse[0], pointsToUse[1], 4);
+                    gc.setStroke(variableColour);
+                    gc.strokePolygon(pointsToUse[0], pointsToUse[1], 4);
+                }
             }
         }
     }
@@ -617,8 +972,11 @@ public class Main extends Application {
         Quad currentQuad;
 
         double[][] distancesToPoints = new double[quadCount][4];
+        double[][] distancesToArrowPoints = new double[axisArrows.length][4];
         double distanceToScreen = (resolutionWidth / 2.0) / Math.tan(Math.toRadians(fieldOfView / 2.0));
         double[][] coordsTranslated = new double[4][];
+        double[][] arrowCoordsTranslated = new double[4][];
+        boolean pointSelected = false;
 
         if(cameraAngle[0] >= 360){
             cameraAngle[0] -= 360;
@@ -628,12 +986,71 @@ public class Main extends Application {
 
         for (int i = 0; i < quadCount; i++) {
             currentQuad = world.get(i);
+            editQuad = world.get(i);
             for (int j = 0; j < 4; j++) {
-                distancesToPoints[i][j] = Math.sqrt(((currentQuad.coordinatesInWorld[j][0]) * (currentQuad.coordinatesInWorld[j][0])) + ((currentQuad.coordinatesInWorld[j][1]) * (currentQuad.coordinatesInWorld[j][1])) + ((currentQuad.coordinatesInWorld[j][2]) * (currentQuad.coordinatesInWorld[j][2])));
+                distancesToPoints[i][j] = Math.sqrt(((currentQuad.coordinatesInWorld[j][0] - cameraPos[0]) * (currentQuad.coordinatesInWorld[j][0] - cameraPos[0])) + ((currentQuad.coordinatesInWorld[j][1] - cameraPos[1]) * (currentQuad.coordinatesInWorld[j][1] - cameraPos[1])) + ((currentQuad.coordinatesInWorld[j][2] - cameraPos[2]) * (currentQuad.coordinatesInWorld[j][2] - cameraPos[2])));
+
+//                if(currentQuad.selectedPoint == j + 1){
+//                    double yaw = -cameraAngle[0];
+//                    double pitch = 90;
+//                    double roll = cameraAngle[1];
+//
+//                    double cosA = Math.sin(Math.toRadians(pitch));
+//                    double sinA = Math.cos(Math.toRadians(pitch));
+//
+//                    double cosB = Math.sin(Math.toRadians(roll));
+//                    double sinB = Math.cos(Math.toRadians(roll));
+//
+//                    double cosC = Math.cos(Math.toRadians(yaw));
+//                    double sinC = Math.sin(Math.toRadians(yaw));
+//
+//                    double[][] mA = {
+//                            {cosA, -sinA, 0},
+//                            {sinA, cosA, 0},
+//                            {0, 0, 1}
+//                    };
+//
+//                    double[][] mB = {
+//                            {1, 0, 0},
+//                            {0, cosB, -sinB},
+//                            {0, sinB, cosB}
+//                    };
+//
+//                    double[][] mC = {
+//                            {cosC, -sinC, 0},
+//                            {sinC, cosC, 0},
+//                            {0, 0, 1}
+//                    };
+//
+//                    double[][] m2 = multiplyMatrices(mC, mB);
+//                    double[][] m3 = multiplyMatrices(m2, mA);
+//
+//                    double px = currentQuad.coordinatesInWorld[j][0] - cameraPos[0];
+//                    double py = currentQuad.coordinatesInWorld[j][1] - cameraPos[1];
+//                    double pz = currentQuad.coordinatesInWorld[j][2] - cameraPos[2];
+//
+//                    coordsTranslated[j] = new double[3];
+//                    coordsTranslated[j][0] = m3[0][0] * px + m3[1][0] * pz + m3[2][0] * py;
+//                    coordsTranslated[j][1] = m3[0][1] * px + m3[1][1] * pz + m3[2][1] * py;
+//                    coordsTranslated[j][2] = m3[0][2] * px + m3[1][2] * pz + m3[2][2] * py;
+//
+//                    currentQuad.pointsMovement[j][0] = coordsTranslated[j][0];
+//                    currentQuad.pointsMovement[j][1] = coordsTranslated[j][1];
+//                    currentQuad.pointsMovement[j][2] = coordsTranslated[j][2] - distancesToPoints[i][j];
+//
+//                    coordsTranslated[j][0] = 0;
+//                    coordsTranslated[j][1] = 0;
+//                    coordsTranslated[j][2] = distancesToPoints[i][j];
+//                }
 
                 double yaw = -cameraAngle[0];
                 double pitch = 90;
                 double roll = cameraAngle[1];
+
+//                if(currentQuad.selectedPoint == j + 1){
+//                    yaw = cameraAngle[0];
+//                    roll = -cameraAngle[1];
+//                }
 
                 double cosA = Math.sin(Math.toRadians(pitch));
                 double sinA = Math.cos(Math.toRadians(pitch));
@@ -644,19 +1061,19 @@ public class Main extends Application {
                 double cosC = Math.cos(Math.toRadians(yaw));
                 double sinC = Math.sin(Math.toRadians(yaw));
 
-                double[][] mA = {
+                double[][] mA = new double[][]{
                         {cosA, -sinA, 0},
                         {sinA, cosA, 0},
                         {0, 0, 1}
                 };
 
-                double[][] mB = {
+                double[][] mB = new double[][]{
                         {1, 0, 0},
                         {0, cosB, -sinB},
                         {0, sinB, cosB}
                 };
 
-                double[][] mC = {
+                double[][] mC = new double[][]{
                         {cosC, -sinC, 0},
                         {sinC, cosC, 0},
                         {0, 0, 1}
@@ -665,14 +1082,104 @@ public class Main extends Application {
                 double[][] m2 = multiplyMatrices(mC, mB);
                 double[][] m3 = multiplyMatrices(m2, mA);
 
-                double px = currentQuad.coordinatesInWorld[j][0] - cameraPos[0];
-                double py = currentQuad.coordinatesInWorld[j][1] - cameraPos[1];
-                double pz = currentQuad.coordinatesInWorld[j][2] - cameraPos[2];
+                if(currentQuad.anchoredTo[0] > 0){
+                    for (int k = 0; k < world.size(); k++) {
+                        if(world.get(k).ID == currentQuad.anchoredTo[0]){
+                            for (int l = 0; l < 3; l++) {
+                                currentQuad.pointsMovement[j][l] = world.get(k).coordinatesInWorld[currentQuad.anchoredTo[1] - 1][l];
+                            }
+                        }
+                    }
+                }
+
+                if(!draggingArrow[0] && !draggingArrow[2]){
+                    mouseMovement[0] = 0;
+                }
+
+                if(!draggingArrow[1]){
+                    mouseMovement[1] = 0;
+                }
+
+                if(!draggingArrow[0]){
+                    currentQuad.oldPointsMovement[j][0] = currentQuad.pointsMovement[j][0];
+                }
+                if(!draggingArrow[1]){
+                    currentQuad.oldPointsMovement[j][1] = currentQuad.pointsMovement[j][1];
+                }
+                if(!draggingArrow[2]){
+                    currentQuad.oldPointsMovement[j][2] = currentQuad.pointsMovement[j][2];
+                }
+
+                if(currentQuad.selectedPoint == j + 1){
+                    if(draggingArrow[0]){
+                        if(cameraAngle[0] >= 90 && cameraAngle[0] < 270){
+                            currentQuad.pointsMovement[j][0] = currentQuad.oldPointsMovement[j][0] - mouseMovement[0] / 5;
+                        }else{
+                            currentQuad.pointsMovement[j][0] = currentQuad.oldPointsMovement[j][0] + mouseMovement[0] / 5;
+                        }
+                    }else if(draggingArrow[1]){
+                        currentQuad.pointsMovement[j][1] = currentQuad.oldPointsMovement[j][1] + mouseMovement[1] / 5;
+                    }else if(draggingArrow[2]){
+                        if(cameraAngle[0] >= 180 && cameraAngle[0] < 360){
+                            currentQuad.pointsMovement[j][2] = currentQuad.oldPointsMovement[j][2] - mouseMovement[0] / 5;
+                        }else{
+                            currentQuad.pointsMovement[j][2] = currentQuad.oldPointsMovement[j][2] + mouseMovement[0] / 5;
+                        }
+                    }
+                }
+
+                double px = currentQuad.coordinatesInWorld[j][0] - cameraPos[0] + currentQuad.pointsMovement[j][0];
+                double py = currentQuad.coordinatesInWorld[j][1] - cameraPos[1] + currentQuad.pointsMovement[j][1];
+                double pz = currentQuad.coordinatesInWorld[j][2] - cameraPos[2] + currentQuad.pointsMovement[j][2];
+
+                if(currentQuad.selectedPoint == j + 1){
+                    arrowInfo = draggingArrow[0] + ", " + draggingArrow[1] + ", " + draggingArrow[2] +
+                            "\n" + px + ", " + py + ", " + pz +
+                            "\n (" + currentQuad.pointsMovement[j][0] + ", " + currentQuad.pointsMovement[j][1] + ", " + currentQuad.pointsMovement[j][2] + "), (" + currentQuad.oldPointsMovement[j][0] + ", " + currentQuad.oldPointsMovement[j][1] + ", " + currentQuad.oldPointsMovement[j][2] + ")" +
+                            "\n (" + cameraPos[0] + ", " + cameraPos[1] + ", " + cameraPos[2] + ")" +
+                            "\n (" + currentQuad.coordinatesInWorld[j][0] + ", " + currentQuad.coordinatesInWorld[j][1] + ", " + currentQuad.coordinatesInWorld[j][2] + ")" +
+                            "\n " + mouseMovement[0] + ", " + mouseMovement[1] + ".";
+                }
+
+//                px = currentQuad.coordinatesInWorld[j][0] - cameraPos[0] + currentQuad.pointsMovement[j][0];
+//                py = currentQuad.coordinatesInWorld[j][1] - cameraPos[1] + currentQuad.pointsMovement[j][1];
+//                pz = currentQuad.coordinatesInWorld[j][2] - cameraPos[2] + currentQuad.pointsMovement[j][2];
 
                 coordsTranslated[j] = new double[3];
-                coordsTranslated[j][0] = m3[0][0] * px + m3[1][0] * pz + m3[2][0] * py;
-                coordsTranslated[j][1] = m3[0][1] * px + m3[1][1] * pz + m3[2][1] * py;
-                coordsTranslated[j][2] = m3[0][2] * px + m3[1][2] * pz + m3[2][2] * py;
+                double a = m3[0][0];
+                double b = m3[1][0];
+                double c = m3[2][0];
+                double d = m3[0][1];
+                double e = m3[1][1];
+                double f = m3[2][1];
+                double g = m3[0][2];
+                double h = m3[1][2];
+                double ii = m3[2][2];
+                coordsTranslated[j][0] = (a * px + b * pz + c * py);
+                coordsTranslated[j][1] = (d * px + e * pz + f * py);
+                coordsTranslated[j][2] = (g * px + h * pz + ii * py);
+
+                if(currentQuad.selectedPoint == j + 1){
+                    pointSelected = true;
+                    for (int k = 0; k < 6; k++) {
+                        axisArrows[k].anchoredTo = new int[]{currentQuad.ID, j + 1};
+                        axisArrows[k].hidden = false;
+                    }
+                }
+
+//                if(currentQuad.selectedPoint == j + 1){
+////                    currentQuad.pointsMovement[j][1] = (d * b * a * coordsTranslated[j][2] - a * a * e * coordsTranslated[j][2] + g * a * e * coordsTranslated[j][0]
+////                            - g * d * b * coordsTranslated[j][0] - g * a * b * coordsTranslated[j][1] + a * a * h * coordsTranslated[j][1] - a * d * h * coordsTranslated[j][0]
+////                            - g * b * d * coordsTranslated[j][0]) / (d * a * c * h + g * b * d * c - g * b * a * f - a * a * f * h + a * a * ii * e - g * c * a * e + g * c * d * b - d * a * ii * b);
+////                    currentQuad.pointsMovement[j][0] = (coordsTranslated[j][0] - b * (a * coordsTranslated[j][1] - d * coordsTranslated[j][0] + d * c * currentQuad.pointsMovement[j][1] - a * f * currentQuad.pointsMovement[j][1]) - c * currentQuad.pointsMovement[j][1]) / a;
+////
+////                    currentQuad.pointsMovement[j][2] = coordsTranslated[j][2] - distancesToPoints[i][j];
+//
+//
+//                    coordsTranslated[j][0] = 0;
+//                    coordsTranslated[j][1] = 0;
+//                    coordsTranslated[j][2] = distancesToPoints[i][j];
+//                }
 
                 DZConstant = distanceToScreen / (coordsTranslated[j][2]);
                 if(DZConstant > 0){
@@ -693,7 +1200,6 @@ public class Main extends Application {
                 centresOnScreen[i][j] = centresOfShapes[i][j] * centreDZ;
             }
 
-            editQuad = world.get(i);
             editQuad.setPointsScreen(pointsOnScreen[i]);
             editQuad.setCoordsTranslated(coordsTranslated);
             editQuad.setCentre(centresOfShapes[i]);
@@ -702,6 +1208,175 @@ public class Main extends Application {
             world.set(i, editQuad);
         }
 
+        if(!pointSelected){
+            for (int k = 0; k < 6; k++) {
+                axisArrows[k].anchoredTo = new int[]{0, 0};
+                axisArrows[k].hidden = true;
+            }
+        }
+        double[][][] aPointsOnScreen = new double[quadCount][4][2];
+        double[][] aCentresOnScreen = new double[quadCount][2];
+        double[] aDistancesToCentres = new double[quadCount];
+        double[][] arrowCentresOfShapes = new double[axisArrows.length][3];
+        double aDZConstant;
+        double aCentreDZ;
+        Quad aCurrentQuad;
+        for (int i = 0; i < axisArrows.length; i++) {
+            aCurrentQuad = axisArrows[i];
+            for (int j = 0; j < 4; j++) {
+                distancesToArrowPoints[i][j] = Math.sqrt(((aCurrentQuad.coordinatesInWorld[j][0] - cameraPos[0]) * (aCurrentQuad.coordinatesInWorld[j][0] - cameraPos[0])) + ((aCurrentQuad.coordinatesInWorld[j][1] - cameraPos[1]) * (aCurrentQuad.coordinatesInWorld[j][1] - cameraPos[1])) + ((aCurrentQuad.coordinatesInWorld[j][2] - cameraPos[2]) * (aCurrentQuad.coordinatesInWorld[j][2] - cameraPos[2])));
+
+//                if(currentQuad.selectedPoint == j + 1){
+//                    double yaw = -cameraAngle[0];
+//                    double pitch = 90;
+//                    double roll = cameraAngle[1];
+//
+//                    double cosA = Math.sin(Math.toRadians(pitch));
+//                    double sinA = Math.cos(Math.toRadians(pitch));
+//
+//                    double cosB = Math.sin(Math.toRadians(roll));
+//                    double sinB = Math.cos(Math.toRadians(roll));
+//
+//                    double cosC = Math.cos(Math.toRadians(yaw));
+//                    double sinC = Math.sin(Math.toRadians(yaw));
+//
+//                    double[][] mA = {
+//                            {cosA, -sinA, 0},
+//                            {sinA, cosA, 0},
+//                            {0, 0, 1}
+//                    };
+//
+//                    double[][] mB = {
+//                            {1, 0, 0},
+//                            {0, cosB, -sinB},
+//                            {0, sinB, cosB}
+//                    };
+//
+//                    double[][] mC = {
+//                            {cosC, -sinC, 0},
+//                            {sinC, cosC, 0},
+//                            {0, 0, 1}
+//                    };
+//
+//                    double[][] m2 = multiplyMatrices(mC, mB);
+//                    double[][] m3 = multiplyMatrices(m2, mA);
+//
+//                    double px = currentQuad.coordinatesInWorld[j][0] - cameraPos[0];
+//                    double py = currentQuad.coordinatesInWorld[j][1] - cameraPos[1];
+//                    double pz = currentQuad.coordinatesInWorld[j][2] - cameraPos[2];
+//
+//                    coordsTranslated[j] = new double[3];
+//                    coordsTranslated[j][0] = m3[0][0] * px + m3[1][0] * pz + m3[2][0] * py;
+//                    coordsTranslated[j][1] = m3[0][1] * px + m3[1][1] * pz + m3[2][1] * py;
+//                    coordsTranslated[j][2] = m3[0][2] * px + m3[1][2] * pz + m3[2][2] * py;
+//
+//                    currentQuad.pointsMovement[j][0] = coordsTranslated[j][0];
+//                    currentQuad.pointsMovement[j][1] = coordsTranslated[j][1];
+//                    currentQuad.pointsMovement[j][2] = coordsTranslated[j][2] - distancesToPoints[i][j];
+//
+//                    coordsTranslated[j][0] = 0;
+//                    coordsTranslated[j][1] = 0;
+//                    coordsTranslated[j][2] = distancesToPoints[i][j];
+//                }
+
+                double yaw = -cameraAngle[0];
+                double pitch = 90;
+                double roll = cameraAngle[1];
+
+//                if(currentQuad.selectedPoint == j + 1){
+//                    yaw = cameraAngle[0];
+//                    roll = -cameraAngle[1];
+//                }
+
+                double cosA = Math.sin(Math.toRadians(pitch));
+                double sinA = Math.cos(Math.toRadians(pitch));
+
+                double cosB = Math.sin(Math.toRadians(roll));
+                double sinB = Math.cos(Math.toRadians(roll));
+
+                double cosC = Math.cos(Math.toRadians(yaw));
+                double sinC = Math.sin(Math.toRadians(yaw));
+
+                double[][] mA = new double[][]{
+                        {cosA, -sinA, 0},
+                        {sinA, cosA, 0},
+                        {0, 0, 1}
+                };
+
+                double[][] mB = new double[][]{
+                        {1, 0, 0},
+                        {0, cosB, -sinB},
+                        {0, sinB, cosB}
+                };
+
+                double[][] mC = new double[][]{
+                        {cosC, -sinC, 0},
+                        {sinC, cosC, 0},
+                        {0, 0, 1}
+                };
+
+                double[][] m2 = multiplyMatrices(mC, mB);
+                double[][] m3 = multiplyMatrices(m2, mA);
+
+                if(aCurrentQuad.anchoredTo[0] > 0){
+                    for (int k = 0; k < world.size(); k++) {
+                        if(world.get(k).ID == aCurrentQuad.anchoredTo[0]){
+                            for (int l = 0; l < 3; l++) {
+                                aCurrentQuad.pointsMovement[j][l] = world.get(k).coordinatesInWorld[aCurrentQuad.anchoredTo[1] - 1][l];
+                            }
+                        }
+                    }
+                }
+
+                double px = aCurrentQuad.coordinatesInWorld[j][0] - cameraPos[0] + aCurrentQuad.pointsMovement[j][0];
+                double py = aCurrentQuad.coordinatesInWorld[j][1] - cameraPos[1] + aCurrentQuad.pointsMovement[j][1];
+                double pz = aCurrentQuad.coordinatesInWorld[j][2] - cameraPos[2] + aCurrentQuad.pointsMovement[j][2];
+
+                arrowCoordsTranslated[j] = new double[3];
+                double a = m3[0][0];
+                double b = m3[1][0];
+                double c = m3[2][0];
+                double d = m3[0][1];
+                double e = m3[1][1];
+                double f = m3[2][1];
+                double g = m3[0][2];
+                double h = m3[1][2];
+                double ii = m3[2][2];
+                arrowCoordsTranslated[j][0] = (a * px + b * pz + c * py);
+                arrowCoordsTranslated[j][1] = (d * px + e * pz + f * py);
+                arrowCoordsTranslated[j][2] = (g * px + h * pz + ii * py);
+
+                aDZConstant = distanceToScreen / (arrowCoordsTranslated[j][2]);
+                if(aDZConstant > 0){
+                    aDZConstant *= -1;
+                }
+                for (int k = 0; k < 2; k++) {
+                    aPointsOnScreen[i][j][k] = (arrowCoordsTranslated[j][k]) * aDZConstant;
+                }
+            }
+            for (int j = 0; j < 3; j++) {
+                arrowCentresOfShapes[i][j] = arrowCoordsTranslated[0][j] + ((arrowCoordsTranslated[2][j] - arrowCoordsTranslated[0][j]) / 2.0);
+            }
+            aDistancesToCentres[i] = Math.sqrt(((arrowCentresOfShapes[i][0]) * (arrowCentresOfShapes[i][0]))
+                    + ((arrowCentresOfShapes[i][1]) * (arrowCentresOfShapes[i][1]))
+                    + ((arrowCentresOfShapes[i][2]) * (arrowCentresOfShapes[i][2])));
+            aCentreDZ = distanceToScreen / arrowCentresOfShapes[i][2];
+            for (int j = 0; j < 2; j++) {
+                aCentresOnScreen[i][j] = arrowCentresOfShapes[i][j] * aCentreDZ;
+            }
+
+            axisArrows[i].setPointsScreen(aPointsOnScreen[i]);
+            axisArrows[i].setCoordsTranslated(arrowCoordsTranslated);
+            axisArrows[i].setCentre(arrowCentresOfShapes[i]);
+            axisArrows[i].setCentreScreen(aCentresOnScreen[i]);
+            axisArrows[i].setDistance(aDistancesToCentres[i]);
+        }
+        sortWorld();
+
+        draw(gc, canvasWidth, canvasHeight, DZConstant, coordsTranslated, distanceToScreen, distancesToPoints);
+    }
+
+    public static void sortWorld(){
         boolean sorted;
         boolean[] checks = new boolean[world.size() - 1];
         Quad tempQuad;
@@ -725,8 +1400,6 @@ public class Main extends Application {
                 }
             }
         }while(!sorted);
-
-        draw(gc, canvasWidth, canvasHeight, DZConstant, coordsTranslated, distanceToScreen, distancesToPoints);
     }
 
     public static double[][] multiplyMatrices(double[][] m1, double[][] m2){
@@ -769,13 +1442,20 @@ public class Main extends Application {
             gameMouse(stage);
         }
 
-        cameraAngle[0] += (e.getX() - (resolutionWidth / 2.0)) / 8.0;
-        double angleToAdd = -(e.getY() + 11 - (resolutionHeight / 2.0)) / 8.0;
-        if(!((cameraAngle[1] >= 90 && angleToAdd > 0)
-                || (cameraAngle[1] <= -90 && angleToAdd < 0))){
-            cameraAngle[1] += angleToAdd;
+        if(!(draggingArrow[0] || draggingArrow[1] || draggingArrow[2])){
+            cameraAngle[0] += (e.getX() - (resolutionWidth / 2.0)) / 8.0;
+            double angleToAdd = -(e.getY() + 11 - (resolutionHeight / 2.0)) / 8.0;
+            if(!((cameraAngle[1] >= 90 && angleToAdd > 0)
+                    || (cameraAngle[1] <= -90 && angleToAdd < 0))){
+                cameraAngle[1] += angleToAdd;
+            }
+        }else{
+            if(draggingArrow[0] || draggingArrow[2]){
+                mouseMovement[0] += (e.getX() - (resolutionWidth / 2.0)) / 8.0;
+            }else{
+                mouseMovement[1] += -(e.getY() + 11 - (resolutionHeight / 2.0)) / 8.0;
+            }
         }
-
 
         if(cameraAngle[1] > 90){
             cameraAngle[1] = 90;
@@ -825,18 +1505,6 @@ public class Main extends Application {
         if(keysPressed.get(KeyCode.SHIFT.hashCode())){
             cameraDeltaUpDown[1] = -moveSpeed;
         }
-//        if(keysPressed.get(KeyCode.W.hashCode())){
-//            cameraAngle[1] += 2;
-//        }
-//        if(keysPressed.get(KeyCode.A.hashCode())){
-//            cameraAngle[0] -= 2;
-//        }
-//        if(keysPressed.get(KeyCode.S.hashCode())){
-//            cameraAngle[1] -= 2;
-//        }
-//        if(keysPressed.get(KeyCode.D.hashCode())){
-//            cameraAngle[0] += 2;
-//        }
     }
 
     private static void cycleMovement(){
@@ -870,14 +1538,26 @@ class Quad{
     protected double[] centreOfQuad;
     protected double[] centreOfQuadOnScreen;
     protected double distanceToCamera;
+    protected int selectedPoint;
+    protected double[][] pointsMovement;
+    protected double[][] oldPointsMovement;
+    protected Color colour;
+    protected int[] anchoredTo;
+    protected boolean hidden;
 
-    public Quad(int Id, double[][] coords, double[][] points, double[] centre, double[] centreScreen, double distance){
+    public Quad(int Id, double[][] coords, double[][] points, double[] centre, double[] centreScreen, double distance, Color col, int[] aT, boolean h){
         ID = Id;
         coordinatesInWorld = coords;
         pointsOnScreen = points;
         centreOfQuad = centre;
         centreOfQuadOnScreen = centreScreen;
         distanceToCamera = distance;
+        selectedPoint = 0;
+        pointsMovement = new double[4][3];
+        oldPointsMovement = new double[4][3];
+        colour = col;
+        anchoredTo = aT;
+        hidden = h;
     }
 
     public void setPointsScreen(double[][] newPoints){
@@ -898,6 +1578,10 @@ class Quad{
 
     public void setDistance(double newDistance){
         distanceToCamera = newDistance;
+    }
+
+    public void setColour(Color newColour){
+        colour = newColour;
     }
 }
 
@@ -971,13 +1655,15 @@ class CustomImage {
     protected double theta3;
     protected double theta4;
     protected double distance;
+    protected double translateX;
     protected double translateY;
     protected double rightDistance;
     protected double opacity;
     protected boolean transitioning = false;
     protected boolean moving = false;
+    protected double speedMultiplier;
 
-    public CustomImage(Image i, double d, double rD, double op, double ty){
+    public CustomImage(Image i, double d, double rD, double op, double tx, double ty, double sM){
         image = i;
         imageView = new ImageView(i);
         raisedPixels1 = 0;
@@ -990,9 +1676,11 @@ class CustomImage {
         theta4 = 0;
         distance = d;
         rightDistance = rD;
+        translateX = tx;
         translateY = ty;
         imageView.setTranslateY(translateY);
         imageView.setOpacity(opacity);
+        speedMultiplier = sM;
     }
 
     public void changeImage(Image newImage){
@@ -1003,7 +1691,7 @@ class CustomImage {
     public void enterAnim(){
         if(theta2 < 90){
             transitioning = true;
-            theta2 += Main.buttonSpeed / 5.0;
+            theta2 += (Main.buttonSpeed * speedMultiplier) / 5.0;
             raisedPixels2 = Math.sin(Math.toRadians(theta2)) * distance;
             imageView.setTranslateY(translateY + distance -(raisedPixels1 + raisedPixels2));
         }else if(theta2 == 90){
@@ -1014,7 +1702,7 @@ class CustomImage {
     public void exitAnim(){
         if(theta2 > 0){
             transitioning = true;
-            theta2 -= Main.buttonSpeed / 5.0;
+            theta2 -= (Main.buttonSpeed * speedMultiplier) / 5.0;
             raisedPixels2 = Math.sin(Math.toRadians(theta2)) * distance;
             imageView.setTranslateY(translateY + distance -(raisedPixels1 + raisedPixels2));
         }else if(theta2 == 0){
@@ -1024,7 +1712,7 @@ class CustomImage {
 
     public void hoverAnimUp(){
         if(theta1 < 180){
-            theta1 += Main.buttonSpeed;
+            theta1 += (Main.buttonSpeed * speedMultiplier);
             raisedPixels1 = ((Math.sin(Math.toRadians(theta1 - 90)) / 2) + 0.5) * 10;
             imageView.setTranslateY(translateY + distance - (raisedPixels1 + raisedPixels2));
         }
@@ -1032,7 +1720,7 @@ class CustomImage {
 
     public void hoverAnimDown(){
         if(theta1 > 0){
-            theta1 -= Main.buttonSpeed;
+            theta1 -= (Main.buttonSpeed * speedMultiplier);
             raisedPixels1 = ((Math.sin(Math.toRadians(theta1 - 90)) / 2) + 0.5) * 10;
             imageView.setTranslateY(translateY + distance -(raisedPixels1 + raisedPixels2));
         }
@@ -1041,9 +1729,9 @@ class CustomImage {
     public void moveRight(){
         if(theta3 < 90){
             moving = true;
-            theta3 += Main.buttonSpeed / 3.0;
+            theta3 += (Main.buttonSpeed * speedMultiplier) / 3.0;
             rightPixels = Math.sin(Math.toRadians(theta3)) * rightDistance;
-            imageView.setTranslateX(rightPixels);
+            imageView.setTranslateX(rightPixels + translateX);
         }else if(theta3 == 90){
             moving = false;
         }
@@ -1052,9 +1740,9 @@ class CustomImage {
     public void moveBackRight(){
         if(theta3 > 0){
             moving = true;
-            theta3 -= Main.buttonSpeed / 3.0;
+            theta3 -= (Main.buttonSpeed * speedMultiplier) / 3.0;
             rightPixels = Math.sin(Math.toRadians(theta3)) * rightDistance;
-            imageView.setTranslateX(rightPixels);
+            imageView.setTranslateX(rightPixels + translateX);
         }else if(theta3 == 0){
             moving = false;
         }
@@ -1063,7 +1751,7 @@ class CustomImage {
     public void fadeIn(){
         if(theta4 < 90){
             transitioning = true;
-            theta4 += Main.buttonSpeed / 3.0;
+            theta4 += (Main.buttonSpeed * speedMultiplier) / 3.0;
             opacity = Math.sin(Math.toRadians(theta4));
             imageView.setOpacity(opacity);
         }else if (theta4 == 90){
@@ -1074,7 +1762,7 @@ class CustomImage {
     public void fadeOut(){
         if(theta4 > 0){
             transitioning = true;
-            theta4 -= Main.buttonSpeed / 3.0;
+            theta4 -= (Main.buttonSpeed * speedMultiplier) / 3.0;
             opacity = Math.sin(Math.toRadians(theta4));
             imageView.setOpacity(opacity);
         }else if (theta4 == 0){
