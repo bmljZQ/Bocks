@@ -68,12 +68,14 @@ public class Main extends Application {
     public static int quadCount = 0;
     public static int objectCount = 0;
     public static int lightCount = 0;
+    public static int triCount = 0;
     public static ArrayList<String> worldStrings;
     public static ArrayList<String> objectStrings;
     public static ArrayList<String> lightStrings;
     public static ArrayList<Quad> world;
     public static ArrayList<Object> objects;
     public static ArrayList<Light> lights;
+    public static ArrayList<Tri> worldTris;
     public ArrayList<ListMap> maps;
     public static BitSet keysPressed = new BitSet(256);
     public static double[][][] coordinates;
@@ -111,6 +113,10 @@ public class Main extends Application {
     public static boolean[] draggingArrow = {false,false,false};
     public static double[] mouseMovement = {0,0};
     public static String arrowInfo = null;
+    public static double FPS;
+    public double FPSLong;
+    public double lastTime;
+    public double currentTime;
 
     public static Quad[] axisArrows = {
             new Quad(-1, new double[][]{
@@ -192,6 +198,7 @@ public class Main extends Application {
         world = new ArrayList<>();
         objects = new ArrayList<>();
         lights = new ArrayList<>();
+        worldTris = new ArrayList<>();
         String readLine;
         int bracketNo = 0;
         boolean endLoop = false;
@@ -249,6 +256,8 @@ public class Main extends Application {
         quadCount = worldStrings.size();
         objectCount = objectStrings.size();
         lightCount = lightStrings.size();
+        triCount = worldStrings.size() * 2;
+
         int elementsToLoad = quadCount + objectCount + lightCount;
         int loadedElements = 0;
         String[][] tempCoordinates;
@@ -271,6 +280,8 @@ public class Main extends Application {
                     coordinates[i][j][k] = Double.parseDouble(coordinatesString[i][j][k]);
                 }
             }
+            worldTris.add(new Tri(i + 1, new double[][]{coordinates[i][0], coordinates[i][1], coordinates[i][2]}, null, null, null, 0, Color.color(Double.parseDouble(tempColourString[0]) / 255, Double.parseDouble(tempColourString[1]) / 255, Double.parseDouble(tempColourString[2]) / 255), new int[]{0,0}, false));
+            worldTris.add(new Tri(i + 1, new double[][]{coordinates[i][0], coordinates[i][2], coordinates[i][3]}, null, null, null, 0, Color.color(Double.parseDouble(tempColourString[0]) / 255, Double.parseDouble(tempColourString[1]) / 255, Double.parseDouble(tempColourString[2]) / 255), new int[]{0,0}, false));
             world.add(new Quad(i + 1, coordinates[i], null, null, null, 0, Color.color(Double.parseDouble(tempColourString[0]) / 255, Double.parseDouble(tempColourString[1]) / 255, Double.parseDouble(tempColourString[2]) / 255), new int[]{0, 0}, false));
             if(fakeLoadingTime){
                 Thread.sleep(100);
@@ -353,6 +364,7 @@ public class Main extends Application {
     public static void unloadMap(){
         mapLoaded = false;
         world.clear();
+        worldTris.clear();
         objects.clear();
         lights.clear();
         cameraPos = new double[]{0,0,0};
@@ -597,8 +609,9 @@ public class Main extends Application {
 
         Timeline renderTimeline = new Timeline(
                 new KeyFrame(
-                        Duration.seconds(0),
+                        Duration.seconds(1.0 / targetFPS),
                         event -> {
+                            lastTime = System.nanoTime();
                             if(!paused && mapLoaded){
                                 checkKeys();
                                 cycleMovement();
@@ -748,9 +761,12 @@ public class Main extends Application {
                             }else{
                                 debugText.setFill(Color.BLACK);
                             }
+
+                            currentTime = System.nanoTime();
+                            FPSLong = 1.0 / ((currentTime - lastTime) / 1000000000.0);
+                            FPS = (Math.round(FPSLong * 10)) / 10.0;
                         }
-                ),
-                new KeyFrame(Duration.seconds(1.0 / targetFPS))
+                )
         );
         renderTimeline.setCycleCount(Timeline.INDEFINITE);
         renderTimeline.play();
@@ -783,7 +799,11 @@ public class Main extends Application {
     }
 
     private static void draw(GraphicsContext gc, double canvasWidth, double canvasHeight, double DZ, double[][] coordsT, double distanceToScreen, double[][] distancesToPoints) {
-        double[][] pointsToUse = new double[2][4];
+        ArrayList<double[]> overlaps = new ArrayList<>();
+
+
+        double[][] pointsToUse = new double[2][3];
+        double[][] aPointsToUse = new double[2][4];
         double colourBrightness;
         double[] colourRGB = new double[3];
         Color variableColour;
@@ -791,22 +811,22 @@ public class Main extends Application {
         gc.setFill(Color.GRAY);
         gc.fillRect(0,0,canvasWidth,canvasHeight);
         boolean inFrontOfCamera;
-        Quad currentQuad;
+        Tri currentTri;
         if(debugMode){
-            for (int i = 0; i < quadCount; i++) {
+            for (int i = 0; i < triCount; i++) {
                 inFrontOfCamera = false;
-                currentQuad = world.get(i);
-                if(!currentQuad.hidden){
-                    if(currentQuad.centreOfQuad[2] > 0){
+                currentTri = worldTris.get(i);
+                if(!currentTri.hidden){
+                    if(currentTri.centreOfTri[2] > 0){
                         inFrontOfCamera = true;
                     }
-                    for (int j = 0; j < 4; j++) {
+                    for (int j = 0; j < 3; j++) {
                         if(inFrontOfCamera){
                             gc.setStroke(Color.DEEPPINK);
-                            gc.strokeLine(0, currentQuad.pointsOnScreen[j][1] + (resolutionHeight / 2.0), canvasWidth, currentQuad.pointsOnScreen[j][1] + (resolutionHeight / 2.0));
-                            gc.strokeLine(currentQuad.pointsOnScreen[j][0] + (resolutionWidth / 2.0), 0, currentQuad.pointsOnScreen[j][0] + (resolutionWidth / 2.0), canvasHeight);
+                            gc.strokeLine(0, currentTri.pointsOnScreen[j][1] + (resolutionHeight / 2.0), canvasWidth, currentTri.pointsOnScreen[j][1] + (resolutionHeight / 2.0));
+                            gc.strokeLine(currentTri.pointsOnScreen[j][0] + (resolutionWidth / 2.0), 0, currentTri.pointsOnScreen[j][0] + (resolutionWidth / 2.0), canvasHeight);
                             gc.setFill(Color.YELLOW);
-                            gc.fillRect(currentQuad.pointsOnScreen[j][0] - 5 + (resolutionWidth / 2.0), currentQuad.pointsOnScreen[j][1] - 5 + (resolutionHeight / 2.0), 10, 10);
+                            gc.fillRect(currentTri.pointsOnScreen[j][0] - 5 + (resolutionWidth / 2.0), currentTri.pointsOnScreen[j][1] - 5 + (resolutionHeight / 2.0), 10, 10);
                         }
                     }
                 }
@@ -814,96 +834,114 @@ public class Main extends Application {
         }
         String debugInfo;
         String debugString;
-        for (int i = 0; i < quadCount; i++) {
+        for (int i = 0; i < triCount; i++) {
             inFrontOfCamera = false;
-            currentQuad = world.get(i);
+            currentTri = worldTris.get(i);
 
-            if(!currentQuad.hidden){
-                if(currentQuad.centreOfQuad[2] > 0){
+            if(!currentTri.hidden){
+                if(currentTri.centreOfTri[2] > 0){
                     inFrontOfCamera = true;
                 }
 
-                colourBrightness = 5 / currentQuad.distanceToCamera;
+                colourBrightness = 5 / currentTri.distanceToCamera;
                 if(colourBrightness > 1){
                     colourBrightness = 1;
                 }
-                colourRGB[0] = currentQuad.colour.getRed() * colourBrightness;
-                colourRGB[1] = currentQuad.colour.getGreen() * colourBrightness;
-                colourRGB[2] = currentQuad.colour.getBlue() * colourBrightness;
+                colourRGB[0] = currentTri.colour.getRed() * colourBrightness;
+                colourRGB[1] = currentTri.colour.getGreen() * colourBrightness;
+                colourRGB[2] = currentTri.colour.getBlue() * colourBrightness;
                 variableColour = Color.color(colourRGB[0], colourRGB[1], colourRGB[2]);
                 for (int j = 0; j < 2; j++) {
-                    for (int k = 0; k < 4; k++) {
+                    for (int k = 0; k < 3; k++) {
                         if(j == 0){
-                            pointsToUse[j][k] = currentQuad.pointsOnScreen[k][j] + (resolutionWidth / 2.0);
+                            pointsToUse[j][k] = currentTri.pointsOnScreen[k][j] + (resolutionWidth / 2.0);
                         }else{
-                            pointsToUse[j][k] = currentQuad.pointsOnScreen[k][j] + (resolutionHeight / 2.0);
+                            pointsToUse[j][k] = currentTri.pointsOnScreen[k][j] + (resolutionHeight / 2.0);
                         }
                     }
                 }
-                debugInfo = "F3 - Debug mode. V" +
-                        "\n (" + Math.round(currentQuad.pointsOnScreen[0][0]) + ", " + Math.round(currentQuad.pointsOnScreen[0][1]) + ") " +
-                        "\n (" + Math.round(currentQuad.pointsOnScreen[1][0]) + ", " + Math.round(currentQuad.pointsOnScreen[1][1]) + ") " +
-                        "\n (" + Math.round(currentQuad.pointsOnScreen[2][0]) + ", " + Math.round(currentQuad.pointsOnScreen[2][1]) + ") " +
-                        "\n (" + Math.round(currentQuad.pointsOnScreen[3][0]) + ", " + Math.round(currentQuad.pointsOnScreen[3][1]) + ") " +
-                        "\n DZ: " + DZ +
-                        "\n (" + Math.round(coordsT[0][0]) + ", " + Math.round(coordsT[0][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-                        "\n (" + Math.round(coordsT[1][0]) + ", " + Math.round(coordsT[1][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-                        "\n (" + Math.round(coordsT[2][0]) + ", " + Math.round(coordsT[2][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-                        "\n (" + Math.round(coordsT[3][0]) + ", " + Math.round(coordsT[3][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-                        "\n (" +  cameraAngle[0] + ", " + cameraAngle[1] + ") " +
-                        "\n {" + draggingArrow[0] + ", " + draggingArrow[1] + ", " + draggingArrow[2] + "}";
-                debugString = debugInfo;
-                if(debugMode){
-                    debugString = debugInfo + "\n \n" + arrowInfo;
-                    debugText.setText(debugString);
-                }else{
-                    debugText.setText("F3 - Debug mode. >");
-                }
+//                debugInfo = "FPS: " + FPS +
+//                        "\n F3 - Debug mode. V" +
+//                        "\n (" + Math.round(currentTri.pointsOnScreen[0][0]) + ", " + Math.round(currentTri.pointsOnScreen[0][1]) + ") " +
+//                        "\n (" + Math.round(currentTri.pointsOnScreen[1][0]) + ", " + Math.round(currentTri.pointsOnScreen[1][1]) + ") " +
+//                        "\n (" + Math.round(currentTri.pointsOnScreen[2][0]) + ", " + Math.round(currentTri.pointsOnScreen[2][1]) + ") " +
+//                        "\n DZ: " + DZ +
+//                        "\n (" + Math.round(coordsT[0][0]) + ", " + Math.round(coordsT[0][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
+//                        "\n (" + Math.round(coordsT[1][0]) + ", " + Math.round(coordsT[1][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
+//                        "\n (" + Math.round(coordsT[2][0]) + ", " + Math.round(coordsT[2][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
+//                        "\n (" +  cameraAngle[0] + ", " + cameraAngle[1] + ") " +
+//                        "\n {" + draggingArrow[0] + ", " + draggingArrow[1] + ", " + draggingArrow[2] + "}" +
+//                        "\n Intersection Points: " + currentTri.iPointsOnScreen.length;
+//                debugString = debugInfo;
+//                if(debugMode){
+//                    debugString = debugInfo + "\n \n" + arrowInfo;
+//                    debugText.setText(debugString);
+//                }else{
+//                    debugText.setText("FPS: " + FPS +
+//                            "\n F3 - Debug mode. >");
+//                }
+                debugText.setText("");
+
                 gc.setStroke(Color.WHITE);
                 gc.strokeLine(resolutionWidth / 2.0, resolutionHeight / 2.0, resolutionWidth / 2.0, resolutionHeight / 2.0);
                 if(inFrontOfCamera){
                     gc.setFill(variableColour);
-                    gc.fillPolygon(pointsToUse[0], pointsToUse[1], 4);
-                    gc.setStroke(variableColour);
-                    gc.strokePolygon(pointsToUse[0], pointsToUse[1], 4);
+                    gc.fillPolygon(pointsToUse[0], pointsToUse[1], 3);
+                    if(debugMode){
+                        gc.setStroke(Color.WHITE);
+                    }else{
+                        gc.setStroke(variableColour);
+                    }
+                    gc.strokePolygon(pointsToUse[0], pointsToUse[1], 3);
+//                    if(currentTri.iPointsOnScreen.length > 3){
+//                        for (int j = 0; j < 3; j++) {
+//                            gc.fillRect(currentTri.iPointsOnScreen[j][0] - 5, currentTri.iPointsOnScreen[j][1] - 5, 10, 10);
+//                        }
+//                    }else{
+//
+//                    }
 
-                    for (int j = 0; j < 4; j++) {
+
+                    for (int j = 0; j < 3; j++) {
                         if(editMode){
                             if(distancesToPoints[i][j] <= 30){
                                 // If statement condition to check if the centre of the screen is within a point's highlight box.
-                                if((currentQuad.pointsOnScreen[j][0] - 10 < 0 && currentQuad.pointsOnScreen[j][0] + 10 > 0)
-                                        && (currentQuad.pointsOnScreen[j][1] - 10 < 0 && currentQuad.pointsOnScreen[j][1] + 10 > 0)){
-                                    if(leftMouseHeld || currentQuad.selectedPoint == j + 1){
+                                if((currentTri.pointsOnScreen[j][0] - 10 < 0 && currentTri.pointsOnScreen[j][0] + 10 > 0)
+                                        && (currentTri.pointsOnScreen[j][1] - 10 < 0 && currentTri.pointsOnScreen[j][1] + 10 > 0)){
+                                    if(leftMouseHeld || currentTri.selectedPoint == j + 1){
                                         gc.setFill(Color.PURPLE);
-                                        currentQuad.selectedPoint = j + 1;
+                                        currentTri.selectedPoint = j + 1;
                                     }else{
                                         gc.setFill(Color.LIME);
                                     }
-                                    world.set(i, currentQuad);
+                                    worldTris.set(i, currentTri);
                                 }else{
-                                    if(currentQuad.selectedPoint == j + 1){
+                                    if(currentTri.selectedPoint == j + 1){
                                         gc.setFill(Color.PURPLE);
                                     }else{
                                         gc.setFill(Color.YELLOW);
                                     }
                                     if(rightMouseHeld){
-                                        currentQuad.selectedPoint = 0;
+                                        currentTri.selectedPoint = 0;
                                     }
                                 }
                             }else{
                                 gc.setFill(Color.RED);
                             }
                             // Drawing method to highlight points.
-                            gc.fillRect(currentQuad.pointsOnScreen[j][0] - 10 + (resolutionWidth / 2.0), currentQuad.pointsOnScreen[j][1] - 10 + (resolutionHeight / 2.0), 20, 20);
+                            gc.fillRect(currentTri.pointsOnScreen[j][0] - 10 + (resolutionWidth / 2.0), currentTri.pointsOnScreen[j][1] - 10 + (resolutionHeight / 2.0), 20, 20);
                         }else{
-                            currentQuad.selectedPoint = 0;
+                            currentTri.selectedPoint = 0;
                         }
                     }
                 }
             }
         }
+
+
         Quad aCurrentQuad;
         Quad aOtherQuad;
+
         boolean aInFrontOfCamera;
         for (int i = 0; i < axisArrows.length; i++) {
             aInFrontOfCamera = false;
@@ -927,6 +965,7 @@ public class Main extends Application {
                 colourRGB[1] = aCurrentQuad.colour.getGreen() * colourBrightness;
                 colourRGB[2] = aCurrentQuad.colour.getBlue() * colourBrightness;
                 variableColour = Color.color(colourRGB[0], colourRGB[1], colourRGB[2]);
+
                 if(Math.sqrt((aCurrentQuad.centreOfQuadOnScreen[0] * aCurrentQuad.centreOfQuadOnScreen[0] * 2) + (aCurrentQuad.centreOfQuadOnScreen[1] * aCurrentQuad.centreOfQuadOnScreen[1] * 2)) <= 100 * (15 / aCurrentQuad.distanceToCamera)
                     || Math.sqrt((aOtherQuad.centreOfQuadOnScreen[0] * aOtherQuad.centreOfQuadOnScreen[0] * 2) + (aOtherQuad.centreOfQuadOnScreen[1] * aOtherQuad.centreOfQuadOnScreen[1] * 2)) <= 100 * (15 / aOtherQuad.distanceToCamera)){
                     variableColour = variableColour.brighter().brighter().brighter();
@@ -941,9 +980,9 @@ public class Main extends Application {
                 for (int j = 0; j < 2; j++) {
                     for (int k = 0; k < 4; k++) {
                         if(j == 0){
-                            pointsToUse[j][k] = aCurrentQuad.pointsOnScreen[k][j] + (resolutionWidth / 2.0);
+                            aPointsToUse[j][k] = aCurrentQuad.pointsOnScreen[k][j] + (resolutionWidth / 2.0);
                         }else{
-                            pointsToUse[j][k] = aCurrentQuad.pointsOnScreen[k][j] + (resolutionHeight / 2.0);
+                            aPointsToUse[j][k] = aCurrentQuad.pointsOnScreen[k][j] + (resolutionHeight / 2.0);
                         }
                     }
                 }
@@ -952,29 +991,41 @@ public class Main extends Application {
                 gc.strokeLine(resolutionWidth / 2.0, resolutionHeight / 2.0, resolutionWidth / 2.0, resolutionHeight / 2.0);
                 if(aInFrontOfCamera){
                     gc.setFill(variableColour);
-                    gc.fillPolygon(pointsToUse[0], pointsToUse[1], 4);
+                    gc.fillPolygon(aPointsToUse[0], aPointsToUse[1], 4);
                     gc.setStroke(variableColour);
-                    gc.strokePolygon(pointsToUse[0], pointsToUse[1], 4);
+                    gc.strokePolygon(aPointsToUse[0], aPointsToUse[1], 4);
                 }
             }
         }
+//        gc.setFill(Color.WHITE);
+//        for (int i = 0; i < triCount; i++) {
+//            currentTri = worldTris.get(i);
+//            if(currentTri.ID == 1){
+//                for (int j = 0; j < currentTri.iPointsOnScreen.length; j++) {
+//                    gc.fillOval(currentTri.iPointsOnScreen[j][0] - 5, currentTri.iPointsOnScreen[j][1] - 5, 10, 10);
+//                }
+//            }
+//        }
+
     }
 
     private static void render(GraphicsContext gc, double canvasWidth, double canvasHeight) {
-        double[][][] pointsOnScreen = new double[quadCount][4][2];
-        double[][] centresOfShapes = new double[quadCount][3];
-        double[][] centresOnScreen = new double[quadCount][2];
-        double[] distancesToCentres = new double[quadCount];
+        double[][][] pointsOnScreen = new double[triCount][3][2];
+        double[][] centresOfShapes = new double[triCount][3];
+        double[][] centresOnScreen = new double[triCount][2];
+        double[] distancesToCentres = new double[triCount];
 
         double DZConstant = 0;
         double centreDZ;
         Quad editQuad;
         Quad currentQuad;
+        Tri editTri;
+        Tri currentTri;
 
-        double[][] distancesToPoints = new double[quadCount][4];
+        double[][] distancesToPoints = new double[triCount][3];
         double[][] distancesToArrowPoints = new double[axisArrows.length][4];
         double distanceToScreen = (resolutionWidth / 2.0) / Math.tan(Math.toRadians(fieldOfView / 2.0));
-        double[][] coordsTranslated = new double[4][];
+        double[][] coordsTranslated = new double[3][];
         double[][] arrowCoordsTranslated = new double[4][];
         boolean pointSelected = false;
 
@@ -984,11 +1035,11 @@ public class Main extends Application {
             cameraAngle[0] += 360;
         }
 
-        for (int i = 0; i < quadCount; i++) {
-            currentQuad = world.get(i);
-            editQuad = world.get(i);
-            for (int j = 0; j < 4; j++) {
-                distancesToPoints[i][j] = Math.sqrt(((currentQuad.coordinatesInWorld[j][0] - cameraPos[0]) * (currentQuad.coordinatesInWorld[j][0] - cameraPos[0])) + ((currentQuad.coordinatesInWorld[j][1] - cameraPos[1]) * (currentQuad.coordinatesInWorld[j][1] - cameraPos[1])) + ((currentQuad.coordinatesInWorld[j][2] - cameraPos[2]) * (currentQuad.coordinatesInWorld[j][2] - cameraPos[2])));
+        for (int i = 0; i < triCount; i++) {
+            currentTri = worldTris.get(i);
+            editTri = worldTris.get(i);
+            for (int j = 0; j < 3; j++) {
+                distancesToPoints[i][j] = Math.sqrt(((currentTri.coordinatesInWorld[j][0] - cameraPos[0]) * (currentTri.coordinatesInWorld[j][0] - cameraPos[0])) + ((currentTri.coordinatesInWorld[j][1] - cameraPos[1]) * (currentTri.coordinatesInWorld[j][1] - cameraPos[1])) + ((currentTri.coordinatesInWorld[j][2] - cameraPos[2]) * (currentTri.coordinatesInWorld[j][2] - cameraPos[2])));
 
 //                if(currentQuad.selectedPoint == j + 1){
 //                    double yaw = -cameraAngle[0];
@@ -1082,11 +1133,11 @@ public class Main extends Application {
                 double[][] m2 = multiplyMatrices(mC, mB);
                 double[][] m3 = multiplyMatrices(m2, mA);
 
-                if(currentQuad.anchoredTo[0] > 0){
-                    for (int k = 0; k < world.size(); k++) {
-                        if(world.get(k).ID == currentQuad.anchoredTo[0]){
+                if(currentTri.anchoredTo[0] > 0){
+                    for (int k = 0; k < worldTris.size(); k++) {
+                        if(worldTris.get(k).ID == currentTri.anchoredTo[0]){
                             for (int l = 0; l < 3; l++) {
-                                currentQuad.pointsMovement[j][l] = world.get(k).coordinatesInWorld[currentQuad.anchoredTo[1] - 1][l];
+                                currentTri.pointsMovement[j][l] = worldTris.get(k).coordinatesInWorld[currentTri.anchoredTo[1] - 1][l];
                             }
                         }
                     }
@@ -1101,43 +1152,43 @@ public class Main extends Application {
                 }
 
                 if(!draggingArrow[0]){
-                    currentQuad.oldPointsMovement[j][0] = currentQuad.pointsMovement[j][0];
+                    currentTri.oldPointsMovement[j][0] = currentTri.pointsMovement[j][0];
                 }
                 if(!draggingArrow[1]){
-                    currentQuad.oldPointsMovement[j][1] = currentQuad.pointsMovement[j][1];
+                    currentTri.oldPointsMovement[j][1] = currentTri.pointsMovement[j][1];
                 }
                 if(!draggingArrow[2]){
-                    currentQuad.oldPointsMovement[j][2] = currentQuad.pointsMovement[j][2];
+                    currentTri.oldPointsMovement[j][2] = currentTri.pointsMovement[j][2];
                 }
 
-                if(currentQuad.selectedPoint == j + 1){
+                if(currentTri.selectedPoint == j + 1){
                     if(draggingArrow[0]){
                         if(cameraAngle[0] >= 90 && cameraAngle[0] < 270){
-                            currentQuad.pointsMovement[j][0] = currentQuad.oldPointsMovement[j][0] - mouseMovement[0] / 5;
+                            currentTri.pointsMovement[j][0] = currentTri.oldPointsMovement[j][0] + mouseMovement[0] / 5;
                         }else{
-                            currentQuad.pointsMovement[j][0] = currentQuad.oldPointsMovement[j][0] + mouseMovement[0] / 5;
+                            currentTri.pointsMovement[j][0] = currentTri.oldPointsMovement[j][0] - mouseMovement[0] / 5;
                         }
                     }else if(draggingArrow[1]){
-                        currentQuad.pointsMovement[j][1] = currentQuad.oldPointsMovement[j][1] + mouseMovement[1] / 5;
+                        currentTri.pointsMovement[j][1] = currentTri.oldPointsMovement[j][1] + mouseMovement[1] / 5;
                     }else if(draggingArrow[2]){
                         if(cameraAngle[0] >= 180 && cameraAngle[0] < 360){
-                            currentQuad.pointsMovement[j][2] = currentQuad.oldPointsMovement[j][2] - mouseMovement[0] / 5;
+                            currentTri.pointsMovement[j][2] = currentTri.oldPointsMovement[j][2] - mouseMovement[0] / 5;
                         }else{
-                            currentQuad.pointsMovement[j][2] = currentQuad.oldPointsMovement[j][2] + mouseMovement[0] / 5;
+                            currentTri.pointsMovement[j][2] = currentTri.oldPointsMovement[j][2] + mouseMovement[0] / 5;
                         }
                     }
                 }
 
-                double px = currentQuad.coordinatesInWorld[j][0] - cameraPos[0] + currentQuad.pointsMovement[j][0];
-                double py = currentQuad.coordinatesInWorld[j][1] - cameraPos[1] + currentQuad.pointsMovement[j][1];
-                double pz = currentQuad.coordinatesInWorld[j][2] - cameraPos[2] + currentQuad.pointsMovement[j][2];
+                double px = currentTri.coordinatesInWorld[j][0] - cameraPos[0] + currentTri.pointsMovement[j][0];
+                double py = currentTri.coordinatesInWorld[j][1] - cameraPos[1] + currentTri.pointsMovement[j][1];
+                double pz = currentTri.coordinatesInWorld[j][2] - cameraPos[2] + currentTri.pointsMovement[j][2];
 
-                if(currentQuad.selectedPoint == j + 1){
+                if(currentTri.selectedPoint == j + 1){
                     arrowInfo = draggingArrow[0] + ", " + draggingArrow[1] + ", " + draggingArrow[2] +
                             "\n" + px + ", " + py + ", " + pz +
-                            "\n (" + currentQuad.pointsMovement[j][0] + ", " + currentQuad.pointsMovement[j][1] + ", " + currentQuad.pointsMovement[j][2] + "), (" + currentQuad.oldPointsMovement[j][0] + ", " + currentQuad.oldPointsMovement[j][1] + ", " + currentQuad.oldPointsMovement[j][2] + ")" +
+                            "\n (" + currentTri.pointsMovement[j][0] + ", " + currentTri.pointsMovement[j][1] + ", " + currentTri.pointsMovement[j][2] + "), (" + currentTri.oldPointsMovement[j][0] + ", " + currentTri.oldPointsMovement[j][1] + ", " + currentTri.oldPointsMovement[j][2] + ")" +
                             "\n (" + cameraPos[0] + ", " + cameraPos[1] + ", " + cameraPos[2] + ")" +
-                            "\n (" + currentQuad.coordinatesInWorld[j][0] + ", " + currentQuad.coordinatesInWorld[j][1] + ", " + currentQuad.coordinatesInWorld[j][2] + ")" +
+                            "\n (" + currentTri.coordinatesInWorld[j][0] + ", " + currentTri.coordinatesInWorld[j][1] + ", " + currentTri.coordinatesInWorld[j][2] + ")" +
                             "\n " + mouseMovement[0] + ", " + mouseMovement[1] + ".";
                 }
 
@@ -1159,10 +1210,10 @@ public class Main extends Application {
                 coordsTranslated[j][1] = (d * px + e * pz + f * py);
                 coordsTranslated[j][2] = (g * px + h * pz + ii * py);
 
-                if(currentQuad.selectedPoint == j + 1){
+                if(currentTri.selectedPoint == j + 1){
                     pointSelected = true;
                     for (int k = 0; k < 6; k++) {
-                        axisArrows[k].anchoredTo = new int[]{currentQuad.ID, j + 1};
+                        axisArrows[k].anchoredTo = new int[]{currentTri.ID, j + 1};
                         axisArrows[k].hidden = false;
                     }
                 }
@@ -1200,12 +1251,14 @@ public class Main extends Application {
                 centresOnScreen[i][j] = centresOfShapes[i][j] * centreDZ;
             }
 
-            editQuad.setPointsScreen(pointsOnScreen[i]);
-            editQuad.setCoordsTranslated(coordsTranslated);
-            editQuad.setCentre(centresOfShapes[i]);
-            editQuad.setCentreScreen(centresOnScreen[i]);
-            editQuad.setDistance(distancesToCentres[i]);
-            world.set(i, editQuad);
+
+
+            editTri.setPointsScreen(pointsOnScreen[i]);
+            editTri.setCoordsTranslated(coordsTranslated);
+            editTri.setCentre(centresOfShapes[i]);
+            editTri.setCentreScreen(centresOnScreen[i]);
+            editTri.setDistance(distancesToCentres[i]);
+            worldTris.set(i, editTri);
         }
 
         if(!pointSelected){
@@ -1372,8 +1425,124 @@ public class Main extends Application {
             axisArrows[i].setDistance(aDistancesToCentres[i]);
         }
         sortWorld();
+//        findIntersections(distanceToScreen);
 
         draw(gc, canvasWidth, canvasHeight, DZConstant, coordsTranslated, distanceToScreen, distancesToPoints);
+    }
+
+    public static void findIntersections(double distanceToScreen){
+        Tri editTri;
+        Tri currentTri;
+        double[][][][] edgeLines = new double[triCount][3][3][2];
+        double[][][] edgeVectors = new double[triCount][3][3];
+        double[][][][] altEdgeLines = new double[triCount][3][3][2];
+        double[][] planeEq = new double[triCount][4];
+        double[][][] intersectionPoints = new double[triCount][][];
+
+        for (int i = 0; i < triCount; i++) {
+            currentTri = worldTris.get(i);
+            editTri = currentTri;
+            int jPlus1;
+            for (int j = 0; j < 3; j++) {
+                jPlus1 = j + 1;
+                if(jPlus1 >= 3){
+                    jPlus1 -= 3;
+                }
+                for (int k = 0; k < 3; k++) {
+//                    edgeLines[i][j][k][0] = currentTri.coordinatesInWorld[j][k] + currentTri.pointsMovement[j][k];
+//                    edgeLines[i][j][k][1] = (currentTri.coordinatesInWorld[jPlus1][k] + currentTri.pointsMovement[jPlus1][k]) - (currentTri.coordinatesInWorld[j][k] + currentTri.pointsMovement[j][k]);
+                    edgeVectors[i][j][k] = (currentTri.coordsTranslated[jPlus1][k]) - (currentTri.coordsTranslated[j][k]);
+                }
+            }
+            double a = edgeVectors[i][0][0];
+            double b = edgeVectors[i][0][1];
+            double c = edgeVectors[i][0][2];
+            double d = edgeVectors[i][1][0];
+            double e = edgeVectors[i][1][1];
+            double f = edgeVectors[i][1][2];
+
+            planeEq[i][0] = ((b * f) - (c * e));
+            planeEq[i][1] = ((c * d) - (a * f));
+            planeEq[i][2] = ((a * e) - (b * d));
+            planeEq[i][3] = (((currentTri.coordsTranslated[0][0]) * planeEq[i][0]) + ((currentTri.coordsTranslated[0][1]) * planeEq[i][1]) + ((currentTri.coordsTranslated[0][2]) * planeEq[i][2]));
+
+            double g = planeEq[i][0];
+            double h = planeEq[i][1];
+            double ii = planeEq[i][2];
+            double k = planeEq[i][3];
+            ArrayList<double[]> intersections = new ArrayList<>();
+            ArrayList<double[]> intersectionsOnScreen = new ArrayList<>();
+            boolean withinX;
+            boolean withinY;
+            boolean withinZ;
+            Tri altTri;
+
+            for (int m = 0; m < triCount; m++) {
+                altTri = worldTris.get(m);
+                for (int j = 0; j < 3; j++) {
+                    jPlus1 = j + 1;
+                    if(jPlus1 >= 3){
+                        jPlus1 -= 3;
+                    }
+                    for (int n = 0; n < 3; n++) {
+                        altEdgeLines[m][j][n][0] = altTri.coordsTranslated[j][n];
+                        altEdgeLines[m][j][n][1] = (altTri.coordsTranslated[jPlus1][n]) - (altTri.coordsTranslated[j][n]);
+                    }
+                }
+
+                for (int j = 0; j < 3; j++) {
+                    jPlus1 = j + 1;
+                    if(jPlus1 >= 3){
+                        jPlus1 -= 3;
+                    }
+                    a = altEdgeLines[m][j][0][0];
+                    b = altEdgeLines[m][j][0][1];
+                    c = altEdgeLines[m][j][1][0];
+                    d = altEdgeLines[m][j][1][1];
+                    e = altEdgeLines[m][j][2][0];
+                    f = altEdgeLines[m][j][2][1];
+
+                    double t = ((g * a) + (h * c) + (ii * e) - k) / ((g * b) + (h * d) + (ii * f));
+//                    if(i == 0){
+//                        System.out.println(t);
+//                    }
+                    double[] point = {a + (b * t), c + (d * t), e + (f * t)};
+                    withinX = (point[0] > (currentTri.coordsTranslated[j][0]) && point[0] < (currentTri.coordsTranslated[jPlus1][0])) || (point[0] < (currentTri.coordsTranslated[j][0]) && point[0] > (currentTri.coordsTranslated[jPlus1][0]));
+                    withinY = (point[1] > (currentTri.coordsTranslated[j][1]) && point[1] < (currentTri.coordsTranslated[jPlus1][1])) || (point[1] < (currentTri.coordsTranslated[j][1]) && point[1] > (currentTri.coordsTranslated[jPlus1][1]));
+                    withinZ = (point[0] > (currentTri.coordsTranslated[j][2]) && point[2] < (currentTri.coordsTranslated[jPlus1][2])) || (point[0] < (currentTri.coordsTranslated[j][2]) && point[2] > (currentTri.coordsTranslated[jPlus1][2]));
+
+                    if(t != Double.POSITIVE_INFINITY && !Double.isNaN(t) && t != Double.NEGATIVE_INFINITY){
+                        if(point[0] > -50 && point[0] < 50){
+                            intersections.add(point);
+                        }
+                    }
+
+
+                }
+
+//                if(intersections.size() > 0){
+//                    System.out.println(i);
+//                }
+
+                double intersectionDZ;
+                double[] iXY;
+                for (int j = 0; j < intersections.size(); j++) {
+                    iXY = new double[2];
+                    intersectionDZ = distanceToScreen / intersections.get(j)[2];
+                    if(intersectionDZ > 0){
+                        intersectionDZ *= -1;
+                    }
+                    for (int l = 0; l < 2; l++) {
+                        iXY[0] = intersections.get(j)[0];
+                        iXY[1] = intersections.get(j)[1];
+                        intersectionsOnScreen.add(new double[]{(iXY[0] * intersectionDZ) + (resolutionWidth / 2.0), (iXY[1] * intersectionDZ) + (resolutionHeight / 2.0)});
+                    }
+                }
+            }
+            editTri.setIntersectionPoints(intersections.toArray(new double[intersections.size()][3]));
+            editTri.setIPointsOnScreen(intersectionsOnScreen.toArray(new double[intersectionsOnScreen.size()][2]));
+            worldTris.set(i,editTri);
+        }
     }
 
     public static void sortWorld(){
@@ -1400,6 +1569,30 @@ public class Main extends Application {
                 }
             }
         }while(!sorted);
+
+        boolean sortedT;
+        boolean[] checksT = new boolean[worldTris.size() - 1];
+        Tri tempQuadT;
+        int pointerT = 0;
+        do{
+            pointerT++;
+            if(pointerT == worldTris.size()){
+                pointerT = 1;
+            }
+            if(worldTris.get(pointerT - 1).distanceToCamera < worldTris.get(pointerT).distanceToCamera){
+                tempQuadT = worldTris.get(pointerT - 1);
+                worldTris.set(pointerT - 1, worldTris.get(pointerT));
+                worldTris.set(pointerT, tempQuadT);
+            }
+            checksT[pointerT - 1] = true;
+            sortedT = true;
+            for (int i = 0; i < worldTris.size() - 1; i++) {
+                if(!checksT[i]){
+                    sortedT = false;
+                    break;
+                }
+            }
+        }while(!sortedT);
     }
 
     public static double[][] multiplyMatrices(double[][] m1, double[][] m2){
@@ -1574,6 +1767,76 @@ class Quad{
 
     public void setCentreScreen(double[] newCentreScreen){
         centreOfQuadOnScreen = newCentreScreen;
+    }
+
+    public void setDistance(double newDistance){
+        distanceToCamera = newDistance;
+    }
+
+    public void setColour(Color newColour){
+        colour = newColour;
+    }
+}
+
+class Tri{
+
+    protected int ID;
+    protected double[][] coordinatesInWorld;
+    protected double[][] pointsOnScreen;
+    protected double[][] coordsTranslated;
+    protected double[] centreOfTri;
+    protected double[] centreOfTriOnScreen;
+    protected double[][] intersectionPoints;
+    protected double[][] iPointsOnScreen;
+    protected double distanceToCamera;
+    protected int selectedPoint;
+    protected double[][] pointsMovement;
+    protected double[][] oldPointsMovement;
+    protected Color colour;
+    protected int[] anchoredTo;
+    protected boolean hidden;
+    protected double[] planeEq;
+    protected double[][] edgeLines;
+
+    public Tri(int Id, double[][] coords, double[][] points, double[] centre, double[] centreScreen, double distance, Color col, int[] aT, boolean h){
+        ID = Id;
+        coordinatesInWorld = coords;
+        pointsOnScreen = points;
+        centreOfTri = centre;
+        centreOfTriOnScreen = centreScreen;
+        distanceToCamera = distance;
+        selectedPoint = 0;
+        pointsMovement = new double[3][3];
+        oldPointsMovement = new double[3][3];
+        colour = col;
+        anchoredTo = aT;
+        hidden = h;
+        planeEq = new double[4];
+        edgeLines = new double[3][2];
+    }
+
+    public void setPointsScreen(double[][] newPoints){
+        pointsOnScreen = newPoints;
+    }
+
+    public void setCoordsTranslated(double[][] newCT){
+        coordsTranslated = newCT;
+    }
+
+    public void setCentre(double[] newCentre){
+        centreOfTri = newCentre;
+    }
+
+    public void setCentreScreen(double[] newCentreScreen){
+        centreOfTriOnScreen = newCentreScreen;
+    }
+
+    public void setIntersectionPoints(double[][] iPoints){
+        intersectionPoints = iPoints;
+    }
+
+    public void setIPointsOnScreen(double[][] iPOS){
+        iPointsOnScreen = iPOS;
     }
 
     public void setDistance(double newDistance){
