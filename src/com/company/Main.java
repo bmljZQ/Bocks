@@ -1,5 +1,8 @@
 package com.company;
 
+//A-Level Computer Science NEA Project by Mark Connolly 2021-2022.
+
+//Import statements.
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
@@ -32,6 +35,10 @@ import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -51,7 +58,8 @@ public class Main extends Application {
     public static final String ANSI_CYAN = "\u001B[36m";
     public static final String ANSI_WHITE = "\u001B[37m";
 
-    public static final String TITLE = "_";
+    //Constant strings, most are used to identify which scene is being shown or which part of the map is being read.
+    public static final String TITLE = "Bocks";
     public static final String MAIN_MENU = "Main menu";
     public static final String MAP_SELECT = "Map select";
     public static final String OPTIONS = "Options";
@@ -61,6 +69,7 @@ public class Main extends Application {
     public static final String R_OBJECTS = "Objects";
     public static final String R_LIGHTS = "Lights";
 
+    //All global variables are placed here so they can be used in multiple methods or in the JavaFX Timeline.
     public static int buttonSpeed = 15;
     public static boolean running = false;
     public static boolean paused = true;
@@ -115,10 +124,18 @@ public class Main extends Application {
     public static String arrowInfo = null;
     public static double FPS;
     public double FPSLong;
-    public double lastTime;
+    public double lastTime = 0;
     public double currentTime;
+    public boolean anyMapTransitioning;
+    public int pageNo = 1;
+    public int lastPage;
+    public static int maxPages;
+    public static boolean[] cursorInBounds = {false, false, false};
+    public static String intersectionInfo;
+    public Pane pane;
 
-    public static Quad[] axisArrows = {
+    //Hard-coded data on how to draw the arrows when moving a point in the game, stored in an array.
+    public static final Quad[] axisArrows = {
             new Quad(-1, new double[][]{
                     {0.5, 0.05, 0},
                     {0.5, -0.05, 0},
@@ -157,7 +174,11 @@ public class Main extends Application {
             }, null, null, null, 0, Color.color(0.0, 0.0, 1.0), new int[]{0, 0}, true)
     };
 
-
+    /**
+     * A method to update the progress bar, with parameters about how many elements are left to load and how many have been loaded.
+     * @param loadedElements Number of already loaded elements
+     * @param elementsToLoad Number of elements to load
+     */
     public static void updateProgressBar(int loadedElements, int elementsToLoad){
         double progress = (double) loadedElements / (double) elementsToLoad;
         loadingBar.setScaleX(progress);
@@ -165,10 +186,17 @@ public class Main extends Application {
         loadingBar.setTranslateX(fullBarWidth * progress * 0.47 - fullBarWidth * 0.5 + 15);
     }
 
+    /**
+     * Simply updates the small text below the loading bar.
+     * @param text Text to display beneath the loading bar
+     */
     public static void updateLoadingContext(String text){
         loadingContext.setText(text);
     }
 
+    /**
+     * A method which uses the same idea as the GUI animations called repeatedly to create an animation for the loading bar.
+     */
     public static void loadingBarAnimation(){
         loadingBarAnimTheta += 5;
         if(loadingBarAnimTheta >= 180){
@@ -178,12 +206,113 @@ public class Main extends Application {
         loadingBar.setScaleX(Math.sin(Math.toRadians(loadingBarAnimTheta)));
     }
 
+    /**
+     * The main method simply sets the 'running' boolean to true, and launches the JavaFX application.
+     * @param args
+     */
     public static void main(String[] args) {
         running = true;
         launch(args);
     }
 
+    /**
+     * Maps details are loaded from the folder here, it takes in a few resources so it can create the ListMap custom objects,
+     *     then returns a dynamic array of said custom object containing the title, description, and icon of every map in the maps folder.
+     * @param mapBase GUI background for an unselected map.
+     * @param mapBaseSelected GUI background for a selected map.
+     * @param defaultMapIcon Default map icon if none is found in the file.
+     * @return mapList - List of all maps ready to be fully loaded.
+     */
+    public static ArrayList<ListMap> loadMaps(Image mapBase, Image mapBaseSelected, Image defaultMapIcon) {
+        ArrayList<ListMap> mapList = new ArrayList<>();
+        BufferedReader reader;
+        String title;
+        String wholeDescription;
+        String[] description;
+        String iconPath;
+        boolean titleFound;
+        boolean descriptionFound;
+        boolean iconPathFound;
+        Image icon = defaultMapIcon;
+        try{
+            DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get("maps"));
+            int j = 0;
+            for (Path path : stream){
+                j++;
+                if (!Files.isDirectory(path)) {
+                    //Variable initialisation.
+                    title = "Untitled map";
+                    description = new String[]{"",""};
+                    iconPath = "None";
+                    reader = new BufferedReader(new FileReader(path.toString()));
+                    titleFound = false;
+                    descriptionFound = false;
+                    iconPathFound = false;
+                    //A while loop to read the file until it has found the data it needs or if it reaches the end of the file.
+                    while(!titleFound || !descriptionFound || !iconPathFound){
+                        String readLine = reader.readLine();
+                        if(readLine != null){
+                            if(readLine.startsWith("<Title>")){
+                                title = readLine.substring(6).trim();
+                                titleFound = true;
+                            }else if(readLine.startsWith("<Description>")){
+                                wholeDescription = readLine.substring(13).trim();
+                                if(wholeDescription.length() > 32){
+                                    for (int i = 0; i < 33; i++) {
+                                        if(wholeDescription.charAt(32 - i) == ' '){
+                                            description = new String[]{wholeDescription.substring(0, 32 - i), wholeDescription.substring(33 - i)};
+                                            if(description[1].length() > 32){
+                                                description[1] = description[1].substring(0, 29) + "...";
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }else{
+                                    description = new String[]{wholeDescription, ""};
+                                }
+                                descriptionFound = true;
+                            }else if(readLine.startsWith("<Icon Path>")) {
+                                iconPath = readLine.substring(11).trim();
+                                iconPathFound = true;
+                            }
+                        }else{
+                            //Reaching the end of the file breaks the loop here, and sets the unfound data to defaults later on.
+                            break;
+                        }
+                    }
+                    if(!(iconPath.equals("None"))){
+                        icon = new Image(new FileInputStream(iconPath));
+                    }else{
+                        icon = defaultMapIcon;
+                    }
+                    //Calculations to decide which page to place the new map file on in the map select menu.
+                    int page = Integer.parseInt(Double.toString((j / 9.0) + 1).split("\\.")[0]);
+                    if(j % 9 == 0){
+                        page--;
+                    }
+                    mapList.add(new ListMap(title, description[0], description[1], mapBase, mapBaseSelected, icon, path.toString(), page, (int) ((j + 1) % 3.0) + 1, (int) Double.parseDouble(Double.toString(((j + 1) / 3.0)).split("\\.")[0])));
+                }
+            }
+        }catch(IOException e){
+            reportError("Error loading all maps.", e);
+        }
+        //Calculations to find out how many pages are needed to contain all the maps.
+        double maxPagesDouble = mapList.size() / 9.0;
+        if(Math.round(maxPagesDouble) == maxPagesDouble){
+            maxPages = (int) maxPagesDouble;
+        }else{
+            maxPages = (int) Math.round(maxPagesDouble) + 1;
+        }
+        return mapList;
+    }
+
+    /**
+     * The method that fully loads a given map. It takes a single map file and stores the loaded details in the maps dynamic array.
+     * @param mapFile The map file to be loaded
+     * @throws InterruptedException The loading bar rarely encounters an exception with the loading bar text, which proves to be practically unfixable
+     */
     private static void loadMap(File mapFile) throws InterruptedException {
+        //Variable initialisation.
         loading = true;
         int linesRead = 0;
         loadingText.setOpacity(1);
@@ -208,6 +337,7 @@ public class Main extends Application {
         try{
             reader = new BufferedReader(new FileReader(mapFile));
             do{
+                //Reading the next line in the file and identifying which part is being read.
                 readLine = reader.readLine().trim();
                 loadingBarAnimation();
                 if(readLine.contains("<World>") || readLine.contains("<world>")){
@@ -217,17 +347,21 @@ public class Main extends Application {
                 }else if(readLine.contains("<Lights>") || readLine.contains("<lights>")){
                     currentlyReading = R_LIGHTS;
                 }
+                //If the line contains a closing bracket, increment the bracket counter.
                 if(readLine.contains("}")){
                     currentlyReading = "";
                     bracketNo++;
                 }
+                //If the bracket counter reaches three, terminate the loop after this iteration as the end of the file has been reached.
                 if(bracketNo == 3){
                     endLoop = true;
                 }
+                //Create a delay if the fake loading time boolean is true, used to test the loading bar visuals at an observable speed.
                 if(fakeLoadingTime){
                     Thread.sleep(33);
                 }
                 loadingBarAnimation();
+                //If the read line contains square brackets, it is world data and therefore is added to the respective dynamic array of strings.
                 if(readLine.startsWith("[") && readLine.endsWith("]")){
                     switch (currentlyReading) {
                         case R_WORLD:
@@ -253,6 +387,7 @@ public class Main extends Application {
             reportError("Error counting the lines in the map file.", e);
         }
 
+        //Variable initialisation for organising the read data.
         quadCount = worldStrings.size();
         objectCount = objectStrings.size();
         lightCount = lightStrings.size();
@@ -271,7 +406,8 @@ public class Main extends Application {
         updateLoadingContext("Indexing world " +
                 "\n geometry.");
         for (int i = 0; i < quadCount; i++) {
-            //pppfpfpfpfpfpfpfpfpffpfpfppfpfpfp
+            //Algorithm to convert the strings to doubles and store them in the correct places inside the Quad and Tri custom objects.
+            //This idea is the same for the other two types of map data (objects and lights).
             tempColourString = worldStrings.get(i).split("¦")[1].split(",");
             tempCoordinates[i] = worldStrings.get(i).split("¦")[0].split("/");
             for (int j = 0; j < 4; j++) {
@@ -280,8 +416,8 @@ public class Main extends Application {
                     coordinates[i][j][k] = Double.parseDouble(coordinatesString[i][j][k]);
                 }
             }
-            worldTris.add(new Tri(i + 1, new double[][]{coordinates[i][0], coordinates[i][1], coordinates[i][2]}, null, null, null, 0, Color.color(Double.parseDouble(tempColourString[0]) / 255, Double.parseDouble(tempColourString[1]) / 255, Double.parseDouble(tempColourString[2]) / 255), new int[]{0,0}, false));
-            worldTris.add(new Tri(i + 1, new double[][]{coordinates[i][0], coordinates[i][2], coordinates[i][3]}, null, null, null, 0, Color.color(Double.parseDouble(tempColourString[0]) / 255, Double.parseDouble(tempColourString[1]) / 255, Double.parseDouble(tempColourString[2]) / 255), new int[]{0,0}, false));
+            worldTris.add(new Tri((2 * i) + 1, new double[][]{coordinates[i][0], coordinates[i][1], coordinates[i][2]}, null, null, null, 0, Color.color(Double.parseDouble(tempColourString[0]) / 255, Double.parseDouble(tempColourString[1]) / 255, Double.parseDouble(tempColourString[2]) / 255), new int[]{0,0}, false));
+            worldTris.add(new Tri((2 * i) + 2, new double[][]{coordinates[i][0], coordinates[i][2], coordinates[i][3]}, null, null, null, 0, Color.color(Double.parseDouble(tempColourString[0]) / 255, Double.parseDouble(tempColourString[1]) / 255, Double.parseDouble(tempColourString[2]) / 255), new int[]{0,0}, false));
             world.add(new Quad(i + 1, coordinates[i], null, null, null, 0, Color.color(Double.parseDouble(tempColourString[0]) / 255, Double.parseDouble(tempColourString[1]) / 255, Double.parseDouble(tempColourString[2]) / 255), new int[]{0, 0}, false));
             if(fakeLoadingTime){
                 Thread.sleep(100);
@@ -361,6 +497,9 @@ public class Main extends Application {
         loading = false;
     }
 
+    /**
+     * Simply deletes all map data when exiting a map.
+     */
     public static void unloadMap(){
         mapLoaded = false;
         world.clear();
@@ -371,12 +510,23 @@ public class Main extends Application {
         cameraAngle = new double[]{0,0};
     }
 
+    /**
+     * This method simply takes the string it was given and prints it to the console in a visually appealing format.
+     * Important for reporting errors and is used in all try-catch blocks.
+     * @param error The string specifying which algorithm encountered the error
+     * @param e The error object to print the stack trace for additional information
+     */
     public static void reportError(String error, Exception e){
-        //This method simply takes the string it was given and prints it to the console in a visually appealing format.
         System.out.println(ANSI_RED + error + ANSI_RESET);
         e.printStackTrace();
     }
 
+    /**
+     * This method is called whenever a key is pressed. It checks if the key is the screenshotting key (F7) and if so, converts
+     * the current scene to a BufferedImage, which is then saved as a png and a colour coded message is printed in console.
+     * @param scene The scene to convert to an image
+     * @param e The key pressed when the method is called
+     */
     public static void screenshot(Scene scene, KeyEvent e){
         if(e.getCode() == KeyCode.F7){
             WritableImage snapshot = scene.snapshot(null);
@@ -394,6 +544,10 @@ public class Main extends Application {
         }
     }
 
+    /**
+     * Simply selects the map specified by a parameter and deselects the previously selected map, if any.
+     * @param map The map to be selected
+     */
     public void selectMap(ListMap map){
         for (int i = 0; i < maps.size(); i++) {
             if(maps.get(i) == map){
@@ -410,9 +564,16 @@ public class Main extends Application {
         }
     }
 
+    /**
+     * The Javafx applications start method, containing almost every single GUI element, as well as the Timeline
+     * to run the simulation.
+     * @param primaryStage The JavaFX application stage
+     * @throws Exception The exception which must be included as it is part of the JavaFX application
+     */
     @Override
     public void start(Stage primaryStage) throws Exception {
 
+        //Initialisation of the game canvas and graphics context.
         Canvas canvas = new Canvas(resolutionWidth, resolutionHeight);
         GraphicsContext gc = canvas.getGraphicsContext2D();
 //        System.out.println(javafx.scene.text.Font.getFamilies());
@@ -421,6 +582,7 @@ public class Main extends Application {
         menuBox.setAlignment(Pos.TOP_CENTER);
         mapSelectBox.setAlignment(Pos.CENTER_LEFT);
 
+        //Loading of all GUI element images.
         File backgroundFile = new File("resources/background1.png");
         primaryStage.getIcons().add(new Image(new FileInputStream("resources/icon.png")));
         Image background = new Image(new FileInputStream(backgroundFile));
@@ -438,10 +600,12 @@ public class Main extends Application {
         Image mapSelectBackgroundImage = new Image(new FileInputStream("resources/Map_Select_Background.png"));
         Image emptyLoadingBarImage = new Image(new FileInputStream("resources/Empty_Loading_Bar.png"));
         Image loadingBarImage = new Image(new FileInputStream("resources/Loading_JUICE.png"));
+        Image leftButton = new Image(new FileInputStream("resources/Left_Button.png"));
+        Image rightButton = new Image(new FileInputStream("resources/Right_Button.png"));
 
+        //Initialisation of loading bar elements, title, and background.
         emptyLoadingBar = new ImageView(emptyLoadingBarImage);
         loadingBar = new ImageView(loadingBarImage);
-
         CustomText title = new CustomText(TITLE, 300);
         loadingText.setFont(javafx.scene.text.Font.font("Monospaced", FontWeight.BOLD,30));
         loadingText.setFill(Color.WHITE);
@@ -451,6 +615,7 @@ public class Main extends Application {
         title.text.setFill(Color.LIMEGREEN);
         Background boxesBackground = new Background(new BackgroundImage(background, BackgroundRepeat.NO_REPEAT, BackgroundRepeat.NO_REPEAT, BackgroundPosition.CENTER, new BackgroundSize((resolutionHeight / background.getHeight()), (resolutionWidth / background.getWidth()), true, true, false, false)));
 
+        //Creation of all image based GUI elements using a custom object 'CustomImage'.
         CustomImage mainMenuButton = new CustomImage(mainMenu, resolutionHeight + 200, 0, 1, 0, -200, 1);
         CustomImage mainMenuGameButton = new CustomImage(mainMenu, 0, 0, 0, 100, 200, 2);
         CustomImage mapSelectButton = new CustomImage(mapSelect, resolutionHeight + 200, 0, 1, 0, 0, 1);
@@ -463,12 +628,14 @@ public class Main extends Application {
         CustomImage rightMenuBracket = new CustomImage(rightMapsBracketImage, resolutionHeight + 200, 1050, 1, 200, 10, 2);
         CustomImage mapSelectBackground = new CustomImage(mapSelectBackgroundImage, resolutionHeight + 200, 0, 0, 0, 0, 1);
         CustomImage gameMenuBackground = new CustomImage(mapSelectBackgroundImage, 0, 0, 0, 36, 11, 2);
+        CustomImage leftScrollButton = new CustomImage(leftButton, resolutionHeight + 200, 0, 1, 550, 0, 1);
+        CustomImage rightScrollButton = new CustomImage(rightButton, resolutionHeight + 200, 0, 1, 550, 0, 1);
+        buttonList = new CustomImage[]{mainMenuButton, mapSelectButton, optionsButton, exitButton, startButton, mainMenuGameButton, leftScrollButton, rightScrollButton};
 
-        ListMap testMap = new ListMap("Test Map", "Just a test map.", "Used for...testing.", mapBase, mapBaseSelected, defaultMapIcon, "maps/testMap.mfb");
-        buttonList = new CustomImage[]{mainMenuButton, mapSelectButton, optionsButton, exitButton, startButton, mainMenuGameButton};
-        maps = new ArrayList<>();
-        maps.add(testMap);
+        //Loading map details.
+        maps = loadMaps(mapBase, mapBaseSelected, defaultMapIcon);
 
+        //Designing of the main menu.
         menuBox.setPadding(new Insets(30,0,10,0));
         menuBox.setSpacing(70);
         menuBox.getChildren().add(title.text);
@@ -477,8 +644,9 @@ public class Main extends Application {
         menuBox.getChildren().add(exitButton.imageView);
         menuBox.setBackground(boxesBackground);
 
+        //Binding of controls to the scenes.
         Scene menuScene = new Scene(menuBox, resolutionWidth, resolutionHeight);
-        Pane pane = new Pane();
+        pane = new Pane();
         pane.getChildren().add(canvas);
         Scene gameScene = new Scene(pane, resolutionWidth, resolutionHeight);
         gameScene.setOnKeyPressed(e -> {
@@ -519,6 +687,7 @@ public class Main extends Application {
             }
         });
 
+        //Designing of the map selection scene.
         mapSelectBox.setPadding(new Insets(10));
         mapSelectBox.setHgap(10);
         mapSelectBox.setVgap(20);
@@ -527,26 +696,67 @@ public class Main extends Application {
         mapSelectBox.add(leftMapsBracket.imageView,0,0);
         mapSelectBox.add(rightMapsBracket.imageView, 1, 0);
         mapSelectBox.add(mainMenuButton.imageView, 2, 0);
+        mapSelectBox.add(leftScrollButton.imageView, 1, 1);
+        leftScrollButton.imageView.setTranslateX(700);
+        mapSelectBox.add(rightScrollButton.imageView, 1, 1);
+        rightScrollButton.imageView.setTranslateX(800);
         mapSelectBox.add(startButton.imageView, 2, 0);
-        mapSelectBox.add(testMap.map, 1, 0);
+        mapSelectBox.setOnScroll(e -> {
+            if(e.getDeltaY() < 0){
+                if(pageNo > 1){
+                    lastPage = pageNo;
+                    pageNo--;
+                }
+            }else if(e.getDeltaY() > 0){
+                if(pageNo < maxPages){
+                    lastPage = pageNo;
+                    pageNo++;
+                }
+            }
+        });
+        //Placement of the maps in the map select menu.
+        for (int i = 0; i < maps.size(); i++) {
+            mapSelectBox.add(maps.get(i).map, 1, 0);
+            maps.get(i).xPos = ((maps.get(i).rowCol[1] - 1) * 400) - 65;
+            maps.get(i).yPos = ((maps.get(i).rowCol[0] - 1) * 120) - 120;
+            maps.get(i).updatePos();
+        }
+
         mapSelectBox.add(loadingText, 1,0);
         mapSelectBox.add(loadingContext, 1, 0);
         mapSelectBox.add(emptyLoadingBar, 1, 0);
         mapSelectBox.add(loadingBar, 1, 0);
         mapSelectBox.setBackground(boxesBackground);
 
+        //Initialisation of the in-game menu.
         pane.getChildren().add(gameMenuBackground.imageView);
         pane.getChildren().add(mainMenuGameButton.imageView);
         pane.getChildren().add(leftMenuBracket.imageView);
         pane.getChildren().add(rightMenuBracket.imageView);
 
+        //Binding of functionality to GUI buttons and initialisation of debugging information.
         debugText = new Text(0, 15, "No information available yet");
+        debugText.setFont(javafx.scene.text.Font.font(Font.SANS_SERIF));
         pane.getChildren().add(debugText);
         pane.setStyle("-fx-background-color: #000000;");
         Scene mapSelectScene = new Scene(mapSelectBox, resolutionWidth, resolutionHeight);
         mapSelectButton.imageView.setOnMouseClicked(e -> focusedWindow = MAP_SELECT);
         optionsButton.imageView.setOnMouseClicked(e -> focusedWindow = OPTIONS);
         mainMenuButton.imageView.setOnMouseClicked(e -> focusedWindow = MAIN_MENU);
+        leftScrollButton.imageView.setOnMouseClicked(e -> {
+            if(pageNo > 1){
+                lastPage = pageNo;
+                pageNo--;
+            }
+//            System.out.println(pageNo + ", " + lastPage);
+        });
+        rightScrollButton.imageView.setOnMouseClicked(e -> {
+            if(pageNo < maxPages){
+                lastPage = pageNo;
+                pageNo++;
+            }
+//            System.out.println(pageNo + ", " + lastPage);
+        });
         mainMenuGameButton.imageView.setOnMouseClicked(e -> focusedWindow = MAIN_MENU);
         startButton.imageView.setOnMouseClicked(e -> {
             if(mapToLoad != null){
@@ -568,7 +778,14 @@ public class Main extends Application {
                 }
             }
         });
-        testMap.map.setOnMouseClicked(e -> selectMap(testMap));
+        for (int i = 0; i < maps.size(); i++) {
+            ListMap m = maps.get(i);
+            m.map.setOnMouseClicked(e -> {
+                if(m.opacity > 0){
+                    selectMap(m);
+                }
+            });
+        }
 
         Alert alert = new Alert(Alert.AlertType.NONE, "REALLY exit?", ButtonType.YES, ButtonType.NO);
         alert.setTitle("Exit");
@@ -578,6 +795,8 @@ public class Main extends Application {
                 exit();
             }
         });
+
+        //Placement of many GUI elements.
         title.text.setTranslateY(-title.distance);
         mapSelectButton.imageView.setTranslateY(mapSelectButton.distance);
         optionsButton.imageView.setTranslateY(optionsButton.distance);
@@ -606,10 +825,16 @@ public class Main extends Application {
         loadingContext.setOpacity(0);
         emptyLoadingBar.setOpacity(0);
         loadingBar.setOpacity(0);
+        lastPage = pageNo;
 
+        /*
+         * The Timeline is the most important part of the program, responsible for controlling every GUI feature and
+         * calling the gameplay related methods.
+         */
         Timeline renderTimeline = new Timeline(
+
                 new KeyFrame(
-                        Duration.seconds(1.0 / targetFPS),
+                        Duration.ZERO,
                         event -> {
                             lastTime = System.nanoTime();
                             if(!paused && mapLoaded){
@@ -617,7 +842,14 @@ public class Main extends Application {
                                 cycleMovement();
                                 render(gc, canvas.getWidth(), canvas.getHeight());
                             }
-
+                            currentTime = System.nanoTime();
+                            FPSLong = 1.0 / ((currentTime - lastTime) / 1000000000.0);
+                            FPS = (Math.round(FPSLong * 10)) / 10.0;
+                }),
+                new KeyFrame(
+                        //The keyframe of every GUI element lasts a certain interval of time so the target number of frames per second can be reached.
+                        Duration.seconds(1.0 / targetFPS),
+                        event -> {
                             if(focusedWindow.equals(MAIN_MENU) && !rightMapsBracket.transitioning){
                                 title.enterAnim();
                                 mapSelectButton.enterAnim();
@@ -642,16 +874,55 @@ public class Main extends Application {
                                 leftMapsBracket.enterAnim();
                                 rightMapsBracket.enterAnim();
                                 mainMenuButton.enterAnim();
+                                leftScrollButton.enterAnim();
+                                rightScrollButton.enterAnim();
                                 startButton.enterAnim();
+                                if(pageNo == 1){
+                                    leftScrollButton.imageView.setOpacity(0.3);
+                                    leftScrollButton.enabled = false;
+                                }else{
+                                    leftScrollButton.imageView.setOpacity(1);
+                                    leftScrollButton.enabled = true;
+                                }
+                                if(pageNo == maxPages){
+                                    rightScrollButton.imageView.setOpacity(0.3);
+                                    rightScrollButton.enabled = false;
+                                }else{
+                                    rightScrollButton.imageView.setOpacity(1);
+                                    rightScrollButton.enabled = true;
+                                }
                                 if(!rightMapsBracket.transitioning){
                                     rightMapsBracket.moveRight();
                                     if(!rightMapsBracket.moving){
-                                        testMap.enterAnim();
+                                        for (int i = 0; i < maps.size(); i++) {
+                                            maps.get(i).enterAnim();
+                                        }
                                         mapSelectBackground.fadeIn();
                                     }
                                 }
+                                for (int i = 0; i < maps.size(); i++) {
+                                    if(maps.get(i).page == pageNo){
+                                        if(lastPage > pageNo){
+                                            maps.get(i).pageInFromLeft();
+                                        }else if(lastPage < pageNo){
+                                            maps.get(i).pageInFromRight();
+                                        }
+                                    }else{
+                                        if(lastPage > pageNo){
+                                            maps.get(i).pageOutToRight();
+                                        }else if(lastPage < pageNo){
+                                            maps.get(i).pageOutToLeft();
+                                        }
+                                    }
+                                }
                             }else{
-                                testMap.exitAnim();
+                                for (int i = 0; i < maps.size(); i++) {
+                                    if(maps.get(i).opacity != 0){
+                                        maps.get(i).exitAnim();
+                                    }else{
+                                        maps.get(i).transitioning = false;
+                                    }
+                                }
                                 mapSelectBackground.fadeOut();
                                 if(loadsFadeOut < 90 && mapLoaded){
                                     loadsFadeOut += 2;
@@ -662,17 +933,26 @@ public class Main extends Application {
                                     loadingBar.setOpacity(Math.sin(Math.toRadians(90 - loadsFadeOut)));
                                     loadingContext.setOpacity(Math.sin(Math.toRadians(90 - loadsFadeOut)));
                                 }
-                                if(!testMap.transitioning){
+                                anyMapTransitioning = false;
+                                for (int i = 0; i < maps.size(); i++) {
+                                    if(maps.get(i).transitioning){
+                                        anyMapTransitioning = true;
+                                        break;
+                                    }
+                                }
+                                if(!anyMapTransitioning){
                                     rightMapsBracket.moveBackRight();
                                     if(!rightMapsBracket.moving){
                                         leftMapsBracket.exitAnim();
                                         rightMapsBracket.exitAnim();
                                         mainMenuButton.exitAnim();
+                                        leftScrollButton.exitAnim();
+                                        rightScrollButton.exitAnim();
                                         startButton.exitAnim();
                                     }
                                 }
                             }
-                            if(focusedWindow.equals(MAIN_MENU) && !(rightMapsBracket.transitioning || rightMapsBracket.moving || testMap.transitioning)){
+                            if(focusedWindow.equals(MAIN_MENU) && !(rightMapsBracket.transitioning || rightMapsBracket.moving || anyMapTransitioning)){
                                 if(primaryStage.getScene() != menuScene){
                                     lastWidth = primaryStage.getWidth();
                                     lastHeight = primaryStage.getHeight();
@@ -690,7 +970,7 @@ public class Main extends Application {
                                     primaryStage.setHeight(lastHeight);
                                 }
                             }
-                            if(focusedWindow.equals(GAME) && !(rightMapsBracket.transitioning || rightMapsBracket.moving || testMap.transitioning) && mapLoaded){
+                            if(focusedWindow.equals(GAME) && !(rightMapsBracket.transitioning || rightMapsBracket.moving || anyMapTransitioning) && mapLoaded){
                                 if(primaryStage.getScene() != gameScene){
                                     lastWidth = primaryStage.getWidth();
                                     lastHeight = primaryStage.getHeight();
@@ -742,29 +1022,30 @@ public class Main extends Application {
                             canvas.setOpacity(1 - (Math.sin(Math.toRadians(gameFade) * 0.5)));
                             for (int i = 0; i < buttonList.length; i++) {
                                 if(!(buttonList[i] == startButton && mapToLoad == null)){
-                                    if(buttonList[i].imageView.isHover()){
-                                        buttonList[i].hoverAnimUp();
-                                    }else{
-                                        buttonList[i].hoverAnimDown();
+                                    if(!(!buttonList[i].enabled && (buttonList[i] == leftScrollButton || buttonList[i] == rightScrollButton))){
+                                        if(buttonList[i].imageView.isHover()){
+                                            buttonList[i].hoverAnimUp();
+                                        }else{
+                                            buttonList[i].hoverAnimDown();
+                                        }
                                     }
                                 }
                             }
-                            if(testMap.map.isHover()){
-                                testMap.hoverAnimUp();
-                            }else{
-                                testMap.hoverAnimDown();
+                            for (int i = 0; i < maps.size(); i++) {
+                                if (maps.get(i).map.isHover()) {
+                                    maps.get(i).hoverAnimUp();
+                                } else {
+                                    maps.get(i).hoverAnimDown();
+                                }
+                                maps.get(i).select();
                             }
-                            testMap.select();
+
                             if(paused){
                                 debugText.setText("|PAUSED|");
                                 debugText.setFill(Color.SILVER);
                             }else{
                                 debugText.setFill(Color.BLACK);
                             }
-
-                            currentTime = System.nanoTime();
-                            FPSLong = 1.0 / ((currentTime - lastTime) / 1000000000.0);
-                            FPS = (Math.round(FPSLong * 10)) / 10.0;
                         }
                 )
         );
@@ -778,15 +1059,26 @@ public class Main extends Application {
         primaryStage.setOnCloseRequest(event -> exit());
     }
 
+    /**
+     * Simply toggles the debugging mode.
+     */
     public void debugMode(){
         debugMode = !debugMode;
     }
 
+    /**
+     * Effectively the opposite of the main method, this sets the running boolean to false and ends the program.
+     */
     public static void exit(){
         running = false;
         System.exit(0);
     }
 
+    /**
+     * A method which simply locates a Quad in the world array by ID and by using linear search.
+     * @param ID The ID of the Quad to find.
+     * @return currentQuad - The Quad found in the world array, returns null if no such Quad exists.
+     */
     public static Quad findQuad(int ID){
         Quad currentQuad;
         for (int i = 0; i < world.size(); i++) {
@@ -798,10 +1090,65 @@ public class Main extends Application {
         return null;
     }
 
-    private static void draw(GraphicsContext gc, double canvasWidth, double canvasHeight, double DZ, double[][] coordsT, double distanceToScreen, double[][] distancesToPoints) {
-        ArrayList<double[]> overlaps = new ArrayList<>();
+
+    private static void draw(GraphicsContext gc, double canvasWidth, double canvasHeight, double DZ, double[][][] coordsT, double distanceToScreen, double[][] distancesToPoints) {
 
 
+
+        //        double[][][] inequalities = new double[triCount][3][2];
+//        int jPlus1;
+//        int nPlus1;
+        Tri currentTri;
+//        Tri altTri;
+//        for (int i = 0; i < triCount; i++) {
+//            currentTri = worldTris.get(i);
+//            for (int j = 0; j < 3; j++) {
+//                jPlus1 = j + 1;
+//                if(jPlus1 > 2){
+//                    jPlus1 -= 3;
+//                }
+//                inequalities[i][j][0] = ((currentTri.pointsOnScreen[jPlus1][1] + (resolutionHeight / 2.0)) - (currentTri.pointsOnScreen[j][1] + (resolutionHeight / 2.0))) / ((currentTri.pointsOnScreen[jPlus1][0] + (resolutionWidth / 2.0)) - (currentTri.pointsOnScreen[j][0] + (resolutionWidth / 2.0)));
+//                inequalities[i][j][1] = ((currentTri.pointsOnScreen[j][1] + (resolutionHeight / 2.0)) - (inequalities[i][j][0] * (currentTri.pointsOnScreen[j][0] + (resolutionWidth / 2.0))));
+//            }
+//        }
+        boolean inFrontOfCamera;
+//        boolean inFrontOfCameraAlt;
+//        for (int i = 0; i < triCount; i++) {
+//            ArrayList<double[]> overlaps = new ArrayList<>();
+//            currentTri = worldTris.get(i);
+//            inFrontOfCamera = currentTri.centreOfTri[2] > 0;
+//            for (int j = 0; j < triCount; j++) {
+//                inFrontOfCameraAlt = worldTris.get(j).centreOfTri[2] > 0;
+//                for (int k = 0; k < 3; k++) {
+//                    int lPlus1;
+//                    for (int l = 0; l < 3; l++) {
+//                        lPlus1 = l + 1;
+//                        if(lPlus1 >= 3){
+//                            lPlus1 -= 3;
+//                        }
+//                        if(inFrontOfCamera && inFrontOfCameraAlt){
+//                            if(round(inequalities[j][l][0], 1) != round(inequalities[i][k][0], 1)){
+//                                double pointX = ((inequalities[i][k][1] - inequalities[j][l][1]) / (inequalities[j][l][0] - inequalities[i][k][0]));
+//                                double[] point = {pointX, ((inequalities[i][k][0] * pointX) + inequalities[i][k][1]), j, k, l};
+//
+//                                boolean on1 = round(point[1], 1) == round((inequalities[i][k][0] * point[0]) + inequalities[i][k][1], 1);
+//                                boolean on2 = round(point[1], 1) == round((inequalities[j][l][0] * point[0]) + inequalities[j][l][1], 1);
+//                                int withinDP = 0;
+//                                boolean withinX = (round(point[0], withinDP) > round(currentTri.pointsOnScreen[l][0] + (resolutionHeight / 2.0), withinDP) && round(point[0], withinDP) < round(currentTri.pointsOnScreen[lPlus1][0] + (resolutionHeight / 2.0), withinDP)) || (round(point[0], withinDP) < round(currentTri.pointsOnScreen[l][0] + (resolutionHeight / 2.0), withinDP) && round(point[0], withinDP) > round(currentTri.pointsOnScreen[lPlus1][0] + (resolutionHeight / 2.0), withinDP));
+//                                boolean withinY = (round(point[1], withinDP) > round(currentTri.pointsOnScreen[l][1] + (resolutionHeight / 2.0), withinDP) && round(point[1], withinDP) < round(currentTri.pointsOnScreen[lPlus1][1] + (resolutionHeight / 2.0), withinDP)) || (round(point[1], withinDP) < round(currentTri.pointsOnScreen[l][1] + (resolutionHeight / 2.0), withinDP) && round(point[1], withinDP) > round(currentTri.pointsOnScreen[lPlus1][1] + (resolutionHeight / 2.0), withinDP));
+//                                if(withinX && withinY && on1 && on2){
+//                                    overlaps.add(point);
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//            //TODO: Add checks to check if the point is in bounds.
+//            worldTris.get(i).setOverlapPoints(overlaps.toArray(new double[overlaps.size()][5]));
+//        }
+
+        //TODO: Calculate overlaps and draw intersections and said overlaps.
         double[][] pointsToUse = new double[2][3];
         double[][] aPointsToUse = new double[2][4];
         double colourBrightness;
@@ -810,8 +1157,7 @@ public class Main extends Application {
         gc.clearRect(0,0,canvasWidth,canvasHeight);
         gc.setFill(Color.GRAY);
         gc.fillRect(0,0,canvasWidth,canvasHeight);
-        boolean inFrontOfCamera;
-        Tri currentTri;
+
         if(debugMode){
             for (int i = 0; i < triCount; i++) {
                 inFrontOfCamera = false;
@@ -860,27 +1206,41 @@ public class Main extends Application {
                         }
                     }
                 }
-//                debugInfo = "FPS: " + FPS +
-//                        "\n F3 - Debug mode. V" +
-//                        "\n (" + Math.round(currentTri.pointsOnScreen[0][0]) + ", " + Math.round(currentTri.pointsOnScreen[0][1]) + ") " +
-//                        "\n (" + Math.round(currentTri.pointsOnScreen[1][0]) + ", " + Math.round(currentTri.pointsOnScreen[1][1]) + ") " +
-//                        "\n (" + Math.round(currentTri.pointsOnScreen[2][0]) + ", " + Math.round(currentTri.pointsOnScreen[2][1]) + ") " +
-//                        "\n DZ: " + DZ +
-//                        "\n (" + Math.round(coordsT[0][0]) + ", " + Math.round(coordsT[0][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-//                        "\n (" + Math.round(coordsT[1][0]) + ", " + Math.round(coordsT[1][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-//                        "\n (" + Math.round(coordsT[2][0]) + ", " + Math.round(coordsT[2][1]) + ", " + Math.round(coordsT[0][2]) + ") " +
-//                        "\n (" +  cameraAngle[0] + ", " + cameraAngle[1] + ") " +
-//                        "\n {" + draggingArrow[0] + ", " + draggingArrow[1] + ", " + draggingArrow[2] + "}" +
-//                        "\n Intersection Points: " + currentTri.iPointsOnScreen.length;
-//                debugString = debugInfo;
-//                if(debugMode){
-//                    debugString = debugInfo + "\n \n" + arrowInfo;
-//                    debugText.setText(debugString);
-//                }else{
-//                    debugText.setText("FPS: " + FPS +
-//                            "\n F3 - Debug mode. >");
-//                }
-                debugText.setText("");
+                try{
+                    debugInfo = "FPS: " + FPS +
+                            "\n F3 - Debug mode. V" +
+                            "\n (" + Math.round(currentTri.pointsOnScreen[0][0]) + ", " + Math.round(currentTri.pointsOnScreen[0][1]) + ") " +
+                            "\n (" + Math.round(currentTri.pointsOnScreen[1][0]) + ", " + Math.round(currentTri.pointsOnScreen[1][1]) + ") " +
+                            "\n (" + Math.round(currentTri.pointsOnScreen[2][0]) + ", " + Math.round(currentTri.pointsOnScreen[2][1]) + ") " +
+                            "\n DZ: " + DZ +
+                            "\n (" + Math.round(coordsT[i][0][0]) + ", " + Math.round(coordsT[i][0][1]) + ", " + Math.round(coordsT[i][0][2]) + ") " +
+                            "\n (" + Math.round(coordsT[i][1][0]) + ", " + Math.round(coordsT[i][1][1]) + ", " + Math.round(coordsT[i][0][2]) + ") " +
+                            "\n (" + Math.round(coordsT[i][2][0]) + ", " + Math.round(coordsT[i][2][1]) + ", " + Math.round(coordsT[i][0][2]) + ") " +
+                            "\n (" +  cameraAngle[0] + ", " + cameraAngle[1] + ") " +
+                            "\n {" + draggingArrow[0] + ", " + draggingArrow[1] + ", " + draggingArrow[2] + "}" +
+                            "\n Intersection Points: " + currentTri.iPointsOnScreen.length;
+                }catch(NullPointerException e){
+                    debugInfo = "FPS: " + FPS +
+                            "\n F3 - Debug mode. V" +
+                            "\n (" + Math.round(currentTri.pointsOnScreen[0][0]) + ", " + Math.round(currentTri.pointsOnScreen[0][1]) + ") " +
+                            "\n (" + Math.round(currentTri.pointsOnScreen[1][0]) + ", " + Math.round(currentTri.pointsOnScreen[1][1]) + ") " +
+                            "\n (" + Math.round(currentTri.pointsOnScreen[2][0]) + ", " + Math.round(currentTri.pointsOnScreen[2][1]) + ") " +
+                            "\n DZ: " + DZ +
+                            "\n (" + Math.round(coordsT[i][0][0]) + ", " + Math.round(coordsT[i][0][1]) + ", " + Math.round(coordsT[i][0][2]) + ") " +
+                            "\n (" + Math.round(coordsT[i][1][0]) + ", " + Math.round(coordsT[i][1][1]) + ", " + Math.round(coordsT[i][0][2]) + ") " +
+                            "\n (" + Math.round(coordsT[i][2][0]) + ", " + Math.round(coordsT[i][2][1]) + ", " + Math.round(coordsT[i][0][2]) + ") " +
+                            "\n (" +  cameraAngle[0] + ", " + cameraAngle[1] + ") " +
+                            "\n {" + draggingArrow[0] + ", " + draggingArrow[1] + ", " + draggingArrow[2] + "}";
+                }
+
+                debugString = debugInfo;
+                if(debugMode){
+                    debugString = debugInfo + "\n \n" + arrowInfo + "\n \n" + intersectionInfo;
+                    debugText.setText(debugString);
+                }else{
+                    debugText.setText("FPS: " + FPS +
+                            "\n F3 - Debug mode. >");
+                }
 
                 gc.setStroke(Color.WHITE);
                 gc.strokeLine(resolutionWidth / 2.0, resolutionHeight / 2.0, resolutionWidth / 2.0, resolutionHeight / 2.0);
@@ -937,7 +1297,21 @@ public class Main extends Application {
                 }
             }
         }
+        gc.setFill(Color.WHITE);
+        for (int i = 0; i < worldTris.size(); i++) {
+            currentTri = worldTris.get(i);
+            for (int j = 0; j < currentTri.iPointsOnScreen.length; j++) {
+                gc.fillOval(currentTri.iPointsOnScreen[j][0] - 5, currentTri.iPointsOnScreen[j][1] - 5, 10, 10);
+            }
+        }
 
+        gc.setFill(Color.ORANGE);
+        for (int i = 0; i < worldTris.size(); i++) {
+            currentTri = worldTris.get(i);
+            for (int j = 0; j < currentTri.overlapPoints.length; j++) {
+                gc.fillOval(currentTri.overlapPoints[j][0] - 5, currentTri.overlapPoints[j][1] - 5, 10, 10);
+            }
+        }
 
         Quad aCurrentQuad;
         Quad aOtherQuad;
@@ -972,9 +1346,10 @@ public class Main extends Application {
                     if(leftMouseHeld){
                         variableColour = variableColour.invert();
                         draggingArrow[(int) Math.round((i + 1) / 2.0) - 1] = true;
-                    }else{
-                        draggingArrow[(int) Math.round((i + 1) / 2.0) - 1] = false;
                     }
+                }
+                if(!leftMouseHeld){
+                    draggingArrow[(int) Math.round((i + 1) / 2.0) - 1] = false;
                 }
 
                 for (int j = 0; j < 2; j++) {
@@ -997,16 +1372,6 @@ public class Main extends Application {
                 }
             }
         }
-//        gc.setFill(Color.WHITE);
-//        for (int i = 0; i < triCount; i++) {
-//            currentTri = worldTris.get(i);
-//            if(currentTri.ID == 1){
-//                for (int j = 0; j < currentTri.iPointsOnScreen.length; j++) {
-//                    gc.fillOval(currentTri.iPointsOnScreen[j][0] - 5, currentTri.iPointsOnScreen[j][1] - 5, 10, 10);
-//                }
-//            }
-//        }
-
     }
 
     private static void render(GraphicsContext gc, double canvasWidth, double canvasHeight) {
@@ -1017,15 +1382,13 @@ public class Main extends Application {
 
         double DZConstant = 0;
         double centreDZ;
-        Quad editQuad;
         Quad currentQuad;
-        Tri editTri;
         Tri currentTri;
 
         double[][] distancesToPoints = new double[triCount][3];
         double[][] distancesToArrowPoints = new double[axisArrows.length][4];
         double distanceToScreen = (resolutionWidth / 2.0) / Math.tan(Math.toRadians(fieldOfView / 2.0));
-        double[][] coordsTranslated = new double[3][];
+        double[][][] coordsTranslated = new double[triCount][3][];
         double[][] arrowCoordsTranslated = new double[4][];
         boolean pointSelected = false;
 
@@ -1035,110 +1398,19 @@ public class Main extends Application {
             cameraAngle[0] += 360;
         }
 
+        double[][] eulerMatrix = eulerAngleCalc();
+
         for (int i = 0; i < triCount; i++) {
             currentTri = worldTris.get(i);
-            editTri = worldTris.get(i);
             for (int j = 0; j < 3; j++) {
                 distancesToPoints[i][j] = Math.sqrt(((currentTri.coordinatesInWorld[j][0] - cameraPos[0]) * (currentTri.coordinatesInWorld[j][0] - cameraPos[0])) + ((currentTri.coordinatesInWorld[j][1] - cameraPos[1]) * (currentTri.coordinatesInWorld[j][1] - cameraPos[1])) + ((currentTri.coordinatesInWorld[j][2] - cameraPos[2]) * (currentTri.coordinatesInWorld[j][2] - cameraPos[2])));
 
-//                if(currentQuad.selectedPoint == j + 1){
-//                    double yaw = -cameraAngle[0];
-//                    double pitch = 90;
-//                    double roll = cameraAngle[1];
-//
-//                    double cosA = Math.sin(Math.toRadians(pitch));
-//                    double sinA = Math.cos(Math.toRadians(pitch));
-//
-//                    double cosB = Math.sin(Math.toRadians(roll));
-//                    double sinB = Math.cos(Math.toRadians(roll));
-//
-//                    double cosC = Math.cos(Math.toRadians(yaw));
-//                    double sinC = Math.sin(Math.toRadians(yaw));
-//
-//                    double[][] mA = {
-//                            {cosA, -sinA, 0},
-//                            {sinA, cosA, 0},
-//                            {0, 0, 1}
-//                    };
-//
-//                    double[][] mB = {
-//                            {1, 0, 0},
-//                            {0, cosB, -sinB},
-//                            {0, sinB, cosB}
-//                    };
-//
-//                    double[][] mC = {
-//                            {cosC, -sinC, 0},
-//                            {sinC, cosC, 0},
-//                            {0, 0, 1}
-//                    };
-//
-//                    double[][] m2 = multiplyMatrices(mC, mB);
-//                    double[][] m3 = multiplyMatrices(m2, mA);
-//
-//                    double px = currentQuad.coordinatesInWorld[j][0] - cameraPos[0];
-//                    double py = currentQuad.coordinatesInWorld[j][1] - cameraPos[1];
-//                    double pz = currentQuad.coordinatesInWorld[j][2] - cameraPos[2];
-//
-//                    coordsTranslated[j] = new double[3];
-//                    coordsTranslated[j][0] = m3[0][0] * px + m3[1][0] * pz + m3[2][0] * py;
-//                    coordsTranslated[j][1] = m3[0][1] * px + m3[1][1] * pz + m3[2][1] * py;
-//                    coordsTranslated[j][2] = m3[0][2] * px + m3[1][2] * pz + m3[2][2] * py;
-//
-//                    currentQuad.pointsMovement[j][0] = coordsTranslated[j][0];
-//                    currentQuad.pointsMovement[j][1] = coordsTranslated[j][1];
-//                    currentQuad.pointsMovement[j][2] = coordsTranslated[j][2] - distancesToPoints[i][j];
-//
-//                    coordsTranslated[j][0] = 0;
-//                    coordsTranslated[j][1] = 0;
-//                    coordsTranslated[j][2] = distancesToPoints[i][j];
-//                }
 
-                double yaw = -cameraAngle[0];
-                double pitch = 90;
-                double roll = cameraAngle[1];
-
-//                if(currentQuad.selectedPoint == j + 1){
-//                    yaw = cameraAngle[0];
-//                    roll = -cameraAngle[1];
-//                }
-
-                double cosA = Math.sin(Math.toRadians(pitch));
-                double sinA = Math.cos(Math.toRadians(pitch));
-
-                double cosB = Math.sin(Math.toRadians(roll));
-                double sinB = Math.cos(Math.toRadians(roll));
-
-                double cosC = Math.cos(Math.toRadians(yaw));
-                double sinC = Math.sin(Math.toRadians(yaw));
-
-                double[][] mA = new double[][]{
-                        {cosA, -sinA, 0},
-                        {sinA, cosA, 0},
-                        {0, 0, 1}
-                };
-
-                double[][] mB = new double[][]{
-                        {1, 0, 0},
-                        {0, cosB, -sinB},
-                        {0, sinB, cosB}
-                };
-
-                double[][] mC = new double[][]{
-                        {cosC, -sinC, 0},
-                        {sinC, cosC, 0},
-                        {0, 0, 1}
-                };
-
-                double[][] m2 = multiplyMatrices(mC, mB);
-                double[][] m3 = multiplyMatrices(m2, mA);
 
                 if(currentTri.anchoredTo[0] > 0){
-                    for (int k = 0; k < worldTris.size(); k++) {
-                        if(worldTris.get(k).ID == currentTri.anchoredTo[0]){
-                            for (int l = 0; l < 3; l++) {
-                                currentTri.pointsMovement[j][l] = worldTris.get(k).coordinatesInWorld[currentTri.anchoredTo[1] - 1][l];
-                            }
+                    for (Tri tris : worldTris) {
+                        if (tris.ID == currentTri.anchoredTo[0]) {
+                            System.arraycopy(tris.coordinatesInWorld[currentTri.anchoredTo[1] - 1], 0, currentTri.pointsMovement[j], 0, 3);
                         }
                     }
                 }
@@ -1192,24 +1464,6 @@ public class Main extends Application {
                             "\n " + mouseMovement[0] + ", " + mouseMovement[1] + ".";
                 }
 
-//                px = currentQuad.coordinatesInWorld[j][0] - cameraPos[0] + currentQuad.pointsMovement[j][0];
-//                py = currentQuad.coordinatesInWorld[j][1] - cameraPos[1] + currentQuad.pointsMovement[j][1];
-//                pz = currentQuad.coordinatesInWorld[j][2] - cameraPos[2] + currentQuad.pointsMovement[j][2];
-
-                coordsTranslated[j] = new double[3];
-                double a = m3[0][0];
-                double b = m3[1][0];
-                double c = m3[2][0];
-                double d = m3[0][1];
-                double e = m3[1][1];
-                double f = m3[2][1];
-                double g = m3[0][2];
-                double h = m3[1][2];
-                double ii = m3[2][2];
-                coordsTranslated[j][0] = (a * px + b * pz + c * py);
-                coordsTranslated[j][1] = (d * px + e * pz + f * py);
-                coordsTranslated[j][2] = (g * px + h * pz + ii * py);
-
                 if(currentTri.selectedPoint == j + 1){
                     pointSelected = true;
                     for (int k = 0; k < 6; k++) {
@@ -1218,30 +1472,19 @@ public class Main extends Application {
                     }
                 }
 
-//                if(currentQuad.selectedPoint == j + 1){
-////                    currentQuad.pointsMovement[j][1] = (d * b * a * coordsTranslated[j][2] - a * a * e * coordsTranslated[j][2] + g * a * e * coordsTranslated[j][0]
-////                            - g * d * b * coordsTranslated[j][0] - g * a * b * coordsTranslated[j][1] + a * a * h * coordsTranslated[j][1] - a * d * h * coordsTranslated[j][0]
-////                            - g * b * d * coordsTranslated[j][0]) / (d * a * c * h + g * b * d * c - g * b * a * f - a * a * f * h + a * a * ii * e - g * c * a * e + g * c * d * b - d * a * ii * b);
-////                    currentQuad.pointsMovement[j][0] = (coordsTranslated[j][0] - b * (a * coordsTranslated[j][1] - d * coordsTranslated[j][0] + d * c * currentQuad.pointsMovement[j][1] - a * f * currentQuad.pointsMovement[j][1]) - c * currentQuad.pointsMovement[j][1]) / a;
-////
-////                    currentQuad.pointsMovement[j][2] = coordsTranslated[j][2] - distancesToPoints[i][j];
-//
-//
-//                    coordsTranslated[j][0] = 0;
-//                    coordsTranslated[j][1] = 0;
-//                    coordsTranslated[j][2] = distancesToPoints[i][j];
-//                }
+                coordsTranslated[i][j] = rotatePoint(currentTri.coordinatesInWorld, currentTri.pointsMovement, j, eulerMatrix);
 
-                DZConstant = distanceToScreen / (coordsTranslated[j][2]);
+                DZConstant = distanceToScreen / (coordsTranslated[i][j][2]);
                 if(DZConstant > 0){
                     DZConstant *= -1;
                 }
                 for (int k = 0; k < 2; k++) {
-                    pointsOnScreen[i][j][k] = (coordsTranslated[j][k]) * DZConstant;
+                    pointsOnScreen[i][j][k] = (coordsTranslated[i][j][k]) * DZConstant;
                 }
+
             }
             for (int j = 0; j < 3; j++) {
-                centresOfShapes[i][j] = coordsTranslated[0][j] + ((coordsTranslated[2][j] - coordsTranslated[0][j]) / 2.0);
+                centresOfShapes[i][j] = coordsTranslated[i][0][j] + ((coordsTranslated[i][2][j] - coordsTranslated[i][0][j]) / 2.0);
             }
             distancesToCentres[i] = Math.sqrt(((centresOfShapes[i][0]) * (centresOfShapes[i][0]))
                     + ((centresOfShapes[i][1]) * (centresOfShapes[i][1]))
@@ -1251,14 +1494,11 @@ public class Main extends Application {
                 centresOnScreen[i][j] = centresOfShapes[i][j] * centreDZ;
             }
 
-
-
-            editTri.setPointsScreen(pointsOnScreen[i]);
-            editTri.setCoordsTranslated(coordsTranslated);
-            editTri.setCentre(centresOfShapes[i]);
-            editTri.setCentreScreen(centresOnScreen[i]);
-            editTri.setDistance(distancesToCentres[i]);
-            worldTris.set(i, editTri);
+            worldTris.get(i).setPointsScreen(pointsOnScreen[i]);
+            worldTris.get(i).setCoordsTranslated(coordsTranslated[i]);
+            worldTris.get(i).setCentre(centresOfShapes[i]);
+            worldTris.get(i).setCentreScreen(centresOnScreen[i]);
+            worldTris.get(i).setDistance(distancesToCentres[i]);
         }
 
         if(!pointSelected){
@@ -1267,9 +1507,9 @@ public class Main extends Application {
                 axisArrows[k].hidden = true;
             }
         }
-        double[][][] aPointsOnScreen = new double[quadCount][4][2];
-        double[][] aCentresOnScreen = new double[quadCount][2];
-        double[] aDistancesToCentres = new double[quadCount];
+        double[][][] aPointsOnScreen = new double[6][4][2];
+        double[][] aCentresOnScreen = new double[6][2];
+        double[] aDistancesToCentres = new double[6];
         double[][] arrowCentresOfShapes = new double[axisArrows.length][3];
         double aDZConstant;
         double aCentreDZ;
@@ -1278,98 +1518,6 @@ public class Main extends Application {
             aCurrentQuad = axisArrows[i];
             for (int j = 0; j < 4; j++) {
                 distancesToArrowPoints[i][j] = Math.sqrt(((aCurrentQuad.coordinatesInWorld[j][0] - cameraPos[0]) * (aCurrentQuad.coordinatesInWorld[j][0] - cameraPos[0])) + ((aCurrentQuad.coordinatesInWorld[j][1] - cameraPos[1]) * (aCurrentQuad.coordinatesInWorld[j][1] - cameraPos[1])) + ((aCurrentQuad.coordinatesInWorld[j][2] - cameraPos[2]) * (aCurrentQuad.coordinatesInWorld[j][2] - cameraPos[2])));
-
-//                if(currentQuad.selectedPoint == j + 1){
-//                    double yaw = -cameraAngle[0];
-//                    double pitch = 90;
-//                    double roll = cameraAngle[1];
-//
-//                    double cosA = Math.sin(Math.toRadians(pitch));
-//                    double sinA = Math.cos(Math.toRadians(pitch));
-//
-//                    double cosB = Math.sin(Math.toRadians(roll));
-//                    double sinB = Math.cos(Math.toRadians(roll));
-//
-//                    double cosC = Math.cos(Math.toRadians(yaw));
-//                    double sinC = Math.sin(Math.toRadians(yaw));
-//
-//                    double[][] mA = {
-//                            {cosA, -sinA, 0},
-//                            {sinA, cosA, 0},
-//                            {0, 0, 1}
-//                    };
-//
-//                    double[][] mB = {
-//                            {1, 0, 0},
-//                            {0, cosB, -sinB},
-//                            {0, sinB, cosB}
-//                    };
-//
-//                    double[][] mC = {
-//                            {cosC, -sinC, 0},
-//                            {sinC, cosC, 0},
-//                            {0, 0, 1}
-//                    };
-//
-//                    double[][] m2 = multiplyMatrices(mC, mB);
-//                    double[][] m3 = multiplyMatrices(m2, mA);
-//
-//                    double px = currentQuad.coordinatesInWorld[j][0] - cameraPos[0];
-//                    double py = currentQuad.coordinatesInWorld[j][1] - cameraPos[1];
-//                    double pz = currentQuad.coordinatesInWorld[j][2] - cameraPos[2];
-//
-//                    coordsTranslated[j] = new double[3];
-//                    coordsTranslated[j][0] = m3[0][0] * px + m3[1][0] * pz + m3[2][0] * py;
-//                    coordsTranslated[j][1] = m3[0][1] * px + m3[1][1] * pz + m3[2][1] * py;
-//                    coordsTranslated[j][2] = m3[0][2] * px + m3[1][2] * pz + m3[2][2] * py;
-//
-//                    currentQuad.pointsMovement[j][0] = coordsTranslated[j][0];
-//                    currentQuad.pointsMovement[j][1] = coordsTranslated[j][1];
-//                    currentQuad.pointsMovement[j][2] = coordsTranslated[j][2] - distancesToPoints[i][j];
-//
-//                    coordsTranslated[j][0] = 0;
-//                    coordsTranslated[j][1] = 0;
-//                    coordsTranslated[j][2] = distancesToPoints[i][j];
-//                }
-
-                double yaw = -cameraAngle[0];
-                double pitch = 90;
-                double roll = cameraAngle[1];
-
-//                if(currentQuad.selectedPoint == j + 1){
-//                    yaw = cameraAngle[0];
-//                    roll = -cameraAngle[1];
-//                }
-
-                double cosA = Math.sin(Math.toRadians(pitch));
-                double sinA = Math.cos(Math.toRadians(pitch));
-
-                double cosB = Math.sin(Math.toRadians(roll));
-                double sinB = Math.cos(Math.toRadians(roll));
-
-                double cosC = Math.cos(Math.toRadians(yaw));
-                double sinC = Math.sin(Math.toRadians(yaw));
-
-                double[][] mA = new double[][]{
-                        {cosA, -sinA, 0},
-                        {sinA, cosA, 0},
-                        {0, 0, 1}
-                };
-
-                double[][] mB = new double[][]{
-                        {1, 0, 0},
-                        {0, cosB, -sinB},
-                        {0, sinB, cosB}
-                };
-
-                double[][] mC = new double[][]{
-                        {cosC, -sinC, 0},
-                        {sinC, cosC, 0},
-                        {0, 0, 1}
-                };
-
-                double[][] m2 = multiplyMatrices(mC, mB);
-                double[][] m3 = multiplyMatrices(m2, mA);
 
                 if(aCurrentQuad.anchoredTo[0] > 0){
                     for (int k = 0; k < world.size(); k++) {
@@ -1381,23 +1529,7 @@ public class Main extends Application {
                     }
                 }
 
-                double px = aCurrentQuad.coordinatesInWorld[j][0] - cameraPos[0] + aCurrentQuad.pointsMovement[j][0];
-                double py = aCurrentQuad.coordinatesInWorld[j][1] - cameraPos[1] + aCurrentQuad.pointsMovement[j][1];
-                double pz = aCurrentQuad.coordinatesInWorld[j][2] - cameraPos[2] + aCurrentQuad.pointsMovement[j][2];
-
-                arrowCoordsTranslated[j] = new double[3];
-                double a = m3[0][0];
-                double b = m3[1][0];
-                double c = m3[2][0];
-                double d = m3[0][1];
-                double e = m3[1][1];
-                double f = m3[2][1];
-                double g = m3[0][2];
-                double h = m3[1][2];
-                double ii = m3[2][2];
-                arrowCoordsTranslated[j][0] = (a * px + b * pz + c * py);
-                arrowCoordsTranslated[j][1] = (d * px + e * pz + f * py);
-                arrowCoordsTranslated[j][2] = (g * px + h * pz + ii * py);
+                arrowCoordsTranslated[j] = rotatePoint(aCurrentQuad.coordinatesInWorld, aCurrentQuad.pointsMovement, j, eulerMatrix);
 
                 aDZConstant = distanceToScreen / (arrowCoordsTranslated[j][2]);
                 if(aDZConstant > 0){
@@ -1425,124 +1557,391 @@ public class Main extends Application {
             axisArrows[i].setDistance(aDistancesToCentres[i]);
         }
         sortWorld();
-//        findIntersections(distanceToScreen);
+        findIntersections(distanceToScreen);
 
         draw(gc, canvasWidth, canvasHeight, DZConstant, coordsTranslated, distanceToScreen, distancesToPoints);
     }
 
     public static void findIntersections(double distanceToScreen){
-        Tri editTri;
+        double[][] distancesBetweenPAndC = new double[triCount][3];
         Tri currentTri;
+        for (int i = 0; i < triCount; i++) {
+            currentTri = worldTris.get(i);
+            for (int j = 0; j < 3; j++) {
+                distancesBetweenPAndC[i][j] = Math.sqrt(((currentTri.centreOfTri[0] - currentTri.coordinatesInWorld[j][0]) * (currentTri.centreOfTri[0] - currentTri.coordinatesInWorld[j][0]))
+                        + ((currentTri.centreOfTri[1] - currentTri.coordinatesInWorld[j][1]) * (currentTri.centreOfTri[1] - currentTri.coordinatesInWorld[j][1]))
+                        + ((currentTri.centreOfTri[0] - currentTri.coordinatesInWorld[j][0]) * (currentTri.centreOfTri[0] - currentTri.coordinatesInWorld[j][0])));
+            }
+        }
+
         double[][][][] edgeLines = new double[triCount][3][3][2];
+        double[][][] cameraToCentreLines = new double[triCount][3][2];
         double[][][] edgeVectors = new double[triCount][3][3];
         double[][][][] altEdgeLines = new double[triCount][3][3][2];
         double[][] planeEq = new double[triCount][4];
         double[][][] intersectionPoints = new double[triCount][][];
+        double[][][] inequalities = new double[triCount][3][2];
+        boolean[][] inequalityGT = new boolean[triCount][3];
+        double[][] eulerMatrix = eulerAngleCalc();
 
         for (int i = 0; i < triCount; i++) {
             currentTri = worldTris.get(i);
-            editTri = currentTri;
-            int jPlus1;
             for (int j = 0; j < 3; j++) {
-                jPlus1 = j + 1;
-                if(jPlus1 >= 3){
-                    jPlus1 -= 3;
-                }
-                for (int k = 0; k < 3; k++) {
-//                    edgeLines[i][j][k][0] = currentTri.coordinatesInWorld[j][k] + currentTri.pointsMovement[j][k];
-//                    edgeLines[i][j][k][1] = (currentTri.coordinatesInWorld[jPlus1][k] + currentTri.pointsMovement[jPlus1][k]) - (currentTri.coordinatesInWorld[j][k] + currentTri.pointsMovement[j][k]);
-                    edgeVectors[i][j][k] = (currentTri.coordsTranslated[jPlus1][k]) - (currentTri.coordsTranslated[j][k]);
-                }
+                double[] centreTranslated = rotatePoint(new double[][]{currentTri.centreOfTri}, new double[1][3], 0, eulerMatrix);
+                cameraToCentreLines[i][j][0] = centreTranslated[j];
+                cameraToCentreLines[i][j][1] = (cameraPos[j]) - (centreTranslated[j]);
             }
-            double a = edgeVectors[i][0][0];
-            double b = edgeVectors[i][0][1];
-            double c = edgeVectors[i][0][2];
-            double d = edgeVectors[i][1][0];
-            double e = edgeVectors[i][1][1];
-            double f = edgeVectors[i][1][2];
+        }
 
-            planeEq[i][0] = ((b * f) - (c * e));
-            planeEq[i][1] = ((c * d) - (a * f));
-            planeEq[i][2] = ((a * e) - (b * d));
-            planeEq[i][3] = (((currentTri.coordsTranslated[0][0]) * planeEq[i][0]) + ((currentTri.coordsTranslated[0][1]) * planeEq[i][1]) + ((currentTri.coordsTranslated[0][2]) * planeEq[i][2]));
-
-            double g = planeEq[i][0];
-            double h = planeEq[i][1];
-            double ii = planeEq[i][2];
-            double k = planeEq[i][3];
-            ArrayList<double[]> intersections = new ArrayList<>();
-            ArrayList<double[]> intersectionsOnScreen = new ArrayList<>();
-            boolean withinX;
-            boolean withinY;
-            boolean withinZ;
-            Tri altTri;
-
-            for (int m = 0; m < triCount; m++) {
-                altTri = worldTris.get(m);
+        for (int i = 0; i < triCount; i++) {
+            currentTri = worldTris.get(i);
+            if(distancesBetweenPAndC[i][0] < 3 && distancesBetweenPAndC[i][1] < 3 && distancesBetweenPAndC[i][2] < 3){
+                double[][] planeCoordsToIntersect;
+                double[][] lineCoordsToIntersect;
+                int jPlus1;
+                int jPlus2;
+                planeCoordsToIntersect = currentTri.coordsTranslated;
                 for (int j = 0; j < 3; j++) {
                     jPlus1 = j + 1;
                     if(jPlus1 >= 3){
                         jPlus1 -= 3;
                     }
-                    for (int n = 0; n < 3; n++) {
-                        altEdgeLines[m][j][n][0] = altTri.coordsTranslated[j][n];
-                        altEdgeLines[m][j][n][1] = (altTri.coordsTranslated[jPlus1][n]) - (altTri.coordsTranslated[j][n]);
+                    for (int k = 0; k < 3; k++) {
+                        edgeVectors[i][j][k] = (planeCoordsToIntersect[jPlus1][k]) - (planeCoordsToIntersect[j][k]);
                     }
                 }
-
                 for (int j = 0; j < 3; j++) {
                     jPlus1 = j + 1;
-                    if(jPlus1 >= 3){
+                    jPlus2 = j + 2;
+                    if(jPlus1 > 2){
                         jPlus1 -= 3;
                     }
-                    a = altEdgeLines[m][j][0][0];
-                    b = altEdgeLines[m][j][0][1];
-                    c = altEdgeLines[m][j][1][0];
-                    d = altEdgeLines[m][j][1][1];
-                    e = altEdgeLines[m][j][2][0];
-                    f = altEdgeLines[m][j][2][1];
+                    if(jPlus2 > 2){
+                        jPlus2 -= 3;
+                    }
+                    inequalities[i][j][0] = ((currentTri.pointsOnScreen[jPlus1][1] + (resolutionHeight / 2.0)) - (currentTri.pointsOnScreen[j][1] + (resolutionHeight / 2.0))) / ((currentTri.pointsOnScreen[jPlus1][0] + (resolutionWidth / 2.0)) - (currentTri.pointsOnScreen[j][0] + (resolutionWidth / 2.0)));
+                    inequalities[i][j][1] = ((currentTri.pointsOnScreen[j][1] + (resolutionHeight / 2.0)) - (inequalities[i][j][0] * (currentTri.pointsOnScreen[j][0] + (resolutionWidth / 2.0))));
+                    inequalityGT[i][j] = (currentTri.pointsOnScreen[jPlus2][1] + (resolutionHeight / 2.0)) > ((inequalities[i][j][0] * (currentTri.pointsOnScreen[jPlus2][0] + (resolutionWidth / 2.0))) + inequalities[i][j][1]);
+                }
 
-                    double t = ((g * a) + (h * c) + (ii * e) - k) / ((g * b) + (h * d) + (ii * f));
-//                    if(i == 0){
-//                        System.out.println(t);
+                double a = edgeVectors[i][0][0];
+                double b = edgeVectors[i][0][1];
+                double c = edgeVectors[i][0][2];
+                double d = edgeVectors[i][1][0];
+                double e = edgeVectors[i][1][1];
+                double f = edgeVectors[i][1][2];
+
+                planeEq[i][0] = ((b * f) - (c * e));
+                planeEq[i][1] = ((c * d) - (a * f));
+                planeEq[i][2] = ((a * e) - (b * d));
+                planeEq[i][3] = (((planeCoordsToIntersect[0][0]) * planeEq[i][0]) + ((planeCoordsToIntersect[0][1]) * planeEq[i][1]) + ((planeCoordsToIntersect[0][2]) * planeEq[i][2]));
+
+                double g = planeEq[i][0];
+                double h = planeEq[i][1];
+                double ii = planeEq[i][2];
+                double k = planeEq[i][3];
+                ArrayList<double[]> intersections = new ArrayList<>();
+                ArrayList<double[]> otherPlaneIntersections = new ArrayList<>();
+//            double[][][] intersectionsT = new double[triCount][][];
+                ArrayList<double[]> intersectionsOnScreen = new ArrayList<>();
+                ArrayList<double[]> otherIntersectionsOnScreen = new ArrayList<>();
+                Tri altTri;
+                cursorInBounds = new boolean[]{false, false, false};
+
+                for (int m = 0; m < triCount; m++) {
+                    altTri = worldTris.get(m);
+                    lineCoordsToIntersect = altTri.coordsTranslated;
+//                for (int j = 0; j < 3; j++) {
+//                    for (int p = 0; p < 3; p++) {
+//
 //                    }
-                    double[] point = {a + (b * t), c + (d * t), e + (f * t)};
-                    withinX = (point[0] > (currentTri.coordsTranslated[j][0]) && point[0] < (currentTri.coordsTranslated[jPlus1][0])) || (point[0] < (currentTri.coordsTranslated[j][0]) && point[0] > (currentTri.coordsTranslated[jPlus1][0]));
-                    withinY = (point[1] > (currentTri.coordsTranslated[j][1]) && point[1] < (currentTri.coordsTranslated[jPlus1][1])) || (point[1] < (currentTri.coordsTranslated[j][1]) && point[1] > (currentTri.coordsTranslated[jPlus1][1]));
-                    withinZ = (point[0] > (currentTri.coordsTranslated[j][2]) && point[2] < (currentTri.coordsTranslated[jPlus1][2])) || (point[0] < (currentTri.coordsTranslated[j][2]) && point[2] > (currentTri.coordsTranslated[jPlus1][2]));
-
-                    if(t != Double.POSITIVE_INFINITY && !Double.isNaN(t) && t != Double.NEGATIVE_INFINITY){
-                        if(point[0] > -50 && point[0] < 50){
-                            intersections.add(point);
+//                }
+                    for (int j = 0; j < 3; j++) {
+                        jPlus1 = j + 1;
+                        if(jPlus1 >= 3){
+                            jPlus1 -= 3;
+                        }
+                        for (int n = 0; n < 3; n++) {
+                            altEdgeLines[m][j][n][0] = lineCoordsToIntersect[j][n];
+                            altEdgeLines[m][j][n][1] = (lineCoordsToIntersect[jPlus1][n]) - (lineCoordsToIntersect[j][n]);
                         }
                     }
 
+//                    double a2 = cameraToCentreLines[m][0][0];
+//                    double b2 = cameraToCentreLines[m][0][1];
+//                    double c2 = cameraToCentreLines[m][1][0];
+//                    double d2 = cameraToCentreLines[m][1][1];
+//                    double e2 = cameraToCentreLines[m][2][0];
+//                    double f2 = cameraToCentreLines[m][2][1];
+//
+//                    double t2 = ((g * a2) + (h * c2) + (ii * e2) - k) / ((g * b2) + (h * d2) + (ii * f2));
+//
+//                    double[] point2;
+//                    if(t2 != Double.POSITIVE_INFINITY && !Double.isNaN(t2) && t2 != Double.NEGATIVE_INFINITY){
+//                        point2 = new double[]{a2 - (b2 * t2), c2 - (d2 * t2), e2 - (f2 * t2)};
+//
+//                        otherPlaneIntersections.add(point2);
+//                    }
 
-                }
+                    for (int j = 0; j < 3; j++) {
 
-//                if(intersections.size() > 0){
-//                    System.out.println(i);
-//                }
+                        a = altEdgeLines[m][j][0][0];
+                        b = altEdgeLines[m][j][0][1];
+                        c = altEdgeLines[m][j][1][0];
+                        d = altEdgeLines[m][j][1][1];
+                        e = altEdgeLines[m][j][2][0];
+                        f = altEdgeLines[m][j][2][1];
 
-                double intersectionDZ;
-                double[] iXY;
-                for (int j = 0; j < intersections.size(); j++) {
-                    iXY = new double[2];
-                    intersectionDZ = distanceToScreen / intersections.get(j)[2];
-                    if(intersectionDZ > 0){
-                        intersectionDZ *= -1;
+                        if(round(((planeEq[i][0] * b) + (planeEq[i][1] * d) + (planeEq[i][2] * f)), 3) != 0){
+
+                            double t = ((g * a) + (h * c) + (ii * e) - k) / ((g * b) + (h * d) + (ii * f));
+
+                            double[] point;
+                            if(t != Double.POSITIVE_INFINITY && !Double.isNaN(t) && t != Double.NEGATIVE_INFINITY){
+                                point = new double[]{a - (b * t), c - (d * t), e - (f * t), altTri.ID};
+
+                                intersections.add(point);
+                            }
+                        }
                     }
-                    for (int l = 0; l < 2; l++) {
-                        iXY[0] = intersections.get(j)[0];
-                        iXY[1] = intersections.get(j)[1];
-                        intersectionsOnScreen.add(new double[]{(iXY[0] * intersectionDZ) + (resolutionWidth / 2.0), (iXY[1] * intersectionDZ) + (resolutionHeight / 2.0)});
+
+                    double intersectionDZ;
+                    double[] iOnScreen;
+                    double[] iXY;
+
+                    double oIntersectionDZ;
+                    double[] oIOnScreen;
+                    double[] oIXY;
+//
+//                    if(i != m){
+//                        for (int j = 0; j < otherPlaneIntersections.size(); j++) {
+//                            oIXY = new double[2];
+//                            oIntersectionDZ = distanceToScreen / otherPlaneIntersections.get(j)[2];
+//                            if(oIntersectionDZ > 0){
+//                                oIntersectionDZ *= -1;
+//                            }
+//                            for (int l = 0; l < 2; l++) {
+//                                oIXY[l] = otherPlaneIntersections.get(j)[l];
+//                            }
+//                            oIOnScreen = new double[]{(oIXY[0] * oIntersectionDZ) + (resolutionWidth / 2.0), (oIXY[1] * oIntersectionDZ) + (resolutionHeight / 2.0), altTri.ID};
+//
+//                            boolean[] withinBounds;
+//                            withinBounds = new boolean[]{false, false, false};
+//                            int oPlus1;
+//                            for (int o = 0; o < 3; o++) {
+//                                oPlus1 = o + 1;
+//                                if(oPlus1 >= 3){
+//                                    oPlus1 -= 3;
+//                                }
+//                                if(inequalityGT[i][o]){
+//                                    if((round(oIOnScreen[1], 4) >= round(((inequalities[i][o][0] * oIOnScreen[0]) + inequalities[i][o][1]), 4))){
+//                                        withinBounds[o] = true;
+//                                    }
+//                                }else{
+//                                    if((round(oIOnScreen[1], 4) <= round(((inequalities[i][o][0] * oIOnScreen[0]) + inequalities[i][o][1]), 4))){
+//                                        withinBounds[o] = true;
+//                                    }
+//                                }
+//                            }
+//                            if((withinBounds[0] && withinBounds[1] && withinBounds[2])){
+//                                otherIntersectionsOnScreen.add(oIOnScreen);
+//                            }else{
+//                                otherPlaneIntersections.remove(j);
+//                            }
+//
+//                            //TODO: Continue making the overlap prioritiser.
+//                        }
+//                    }
+//
+//                    double[] distancesToPoints = new double[otherIntersectionsOnScreen.size()];
+//
+//                    for (int j = 0; j < otherIntersectionsOnScreen.size(); j++) {
+//                        distancesToPoints[j] = Math.sqrt(((otherIntersectionsOnScreen.get(j)[0] - cameraPos[0]) * (otherIntersectionsOnScreen.get(j)[0] - cameraPos[0]))
+//                                + ((otherIntersectionsOnScreen.get(j)[1] - cameraPos[1]) * (otherIntersectionsOnScreen.get(j)[1] - cameraPos[1]))
+//                                + ((otherIntersectionsOnScreen.get(j)[2] - cameraPos[2]) * (otherIntersectionsOnScreen.get(j)[2] - cameraPos[2])));
+//                    }
+//
+//                    if(otherIntersectionsOnScreen.size() > 1){
+//                        boolean sorted;
+//                        boolean[] checks = new boolean[otherIntersectionsOnScreen.size() - 1];
+//                        Tri tempTri;
+//                        int pointer = 0;
+//                        do{
+//                            pointer++;
+//                            if(pointer == otherIntersectionsOnScreen.size()){
+//                                pointer = 0;
+//                            }
+//                            if(distancesToPoints[pointer - 1] < distancesToPoints[pointer]){
+//                                tempTri = worldTris.get(pointer - 1);
+//                                worldTris.set(pointer - 1, worldTris.get(pointer));
+//                                worldTris.set(pointer, tempTri);
+//                            }
+//                            checks[pointer - 1] = true;
+//                            sorted = true;
+//                            for (int z = 0; z < otherIntersectionsOnScreen.size() - 1; z++) {
+//                                if(!checks[z]){
+//                                    sorted = false;
+//                                    break;
+//                                }
+//                            }
+//                        }while(!sorted);
+//                    }
+
+                    for (int j = 0; j < intersections.size(); j++) {
+//                    intersectionsT[i][j] = rotatePoint(intersections.toArray(new double[intersections.size()][3]), new double[intersections.size()][3], j, eulerMatrix);
+                        iXY = new double[2];
+                        intersectionDZ = distanceToScreen / intersections.get(j)[2];
+                        if(intersectionDZ > 0){
+                            intersectionDZ *= -1;
+                        }
+                        for (int l = 0; l < 2; l++) {
+                            iXY[l] = intersections.get(j)[l];
+                        }
+                        iOnScreen = new double[]{(iXY[0] * intersectionDZ) + (resolutionWidth / 2.0), (iXY[1] * intersectionDZ) + (resolutionHeight / 2.0), altTri.ID};
+
+                        boolean[] withinBounds;
+                        withinBounds = new boolean[]{false, false, false};
+                        int oPlus1;
+                        for (int o = 0; o < 3; o++) {
+                            oPlus1 = o + 1;
+                            if(oPlus1 >= 3){
+                                oPlus1 -= 3;
+                            }
+//                        boolean withinX = ((round(iOnScreen[0], 0) >= round((altTri.pointsOnScreen[o][0] + (resolutionWidth / 2.0)), 0)) && (round(iOnScreen[0], 0) <= round((altTri.pointsOnScreen[oPlus1][0] + (resolutionWidth / 2.0)), 0)))
+//                                || ((round(iOnScreen[0], 0) <= round((altTri.pointsOnScreen[o][0] + (resolutionWidth / 2.0)), 0)) && (round(iOnScreen[0], 0) >= round((altTri.pointsOnScreen[oPlus1][0] + (resolutionWidth / 2.0)), 0)));
+//                        boolean withinY = ((round(iOnScreen[1], 0) >= round((altTri.pointsOnScreen[o][1] + (resolutionHeight / 2.0)), 0)) && (round(iOnScreen[1], 0) <= round((altTri.pointsOnScreen[oPlus1][1] + (resolutionHeight / 2.0)), 0)))
+//                                || ((round(iOnScreen[1], 0) <= round((altTri.pointsOnScreen[o][1] + (resolutionHeight / 2.0)), 0)) && (round(iOnScreen[1], 0) >= round((altTri.pointsOnScreen[oPlus1][1] + (resolutionHeight / 2.0)), 0)));
+                            if(inequalityGT[i][o]){
+                                if((round(iOnScreen[1], 4) >= round(((inequalities[i][o][0] * iOnScreen[0]) + inequalities[i][o][1]), 4))){
+//                                if(withinX || withinY){
+//
+//                                }
+                                    withinBounds[o] = true;
+//                                System.out.println(Math.round(iOnScreen[1] * 100) / 100.0 + " >= " + Math.round(((inequalities[i][o][0] * iOnScreen[0]) + inequalities[i][o][1]) * 100) / 100.0);
+                                }
+                            }else{
+                                if((round(iOnScreen[1], 4) <= round(((inequalities[i][o][0] * iOnScreen[0]) + inequalities[i][o][1]), 4))){
+//                                if(withinX || withinY){
+//
+//                                }
+                                    withinBounds[o] = true;
+//                                System.out.println(Math.round(iOnScreen[1] * 100) / 100.0 + " <= " + Math.round(((inequalities[i][o][0] * iOnScreen[0]) + inequalities[i][o][1]) * 100) / 100.0);
+                                }
+                            }
+
+                            if(currentTri.ID == 1){
+//                            if(rightMouseHeld){
+//                                System.out.println();
+//                            }
+//                            StringBuilder intersectionList = new StringBuilder("Intersections: ");
+//                            for (int l = 0; l < intersections.size(); l++) {
+//                                intersectionList.append("\n {").append(Math.round(intersections.get(l)[0] * 100) / 100.0).append(", ").append(Math.round(intersections.get(l)[1] * 100) / 100.0).append(", ").append(Math.round(intersections.get(l)[2] * 100) / 100.0).append("} ");
+//                            }
+                                intersectionInfo = "Specs for Tri ID 1: " +
+                                        "\n 1. y = " + (round(inequalities[i][0][0], 2)) + "x + " + (round(inequalities[i][0][1], 2)) +
+                                        "\n 2. y = " + (round(inequalities[i][1][0], 2)) + "x + " + (round(inequalities[i][1][1], 2)) +
+                                        "\n 3. y = " + (round(inequalities[i][2][0], 2)) + "x + " + (round(inequalities[i][2][1], 2)) +
+                                        "\n {" + inequalityGT[i][0] + ", " + inequalityGT[i][1] + ", " + inequalityGT[i][2] + "}" +
+                                        "\n {" + withinBounds[0] + ", " + withinBounds[1] + ", " + withinBounds[2] + "}" +
+//                                    "\n " +
+//                                    "\n " + intersectionList;
+                                        "\n {" + cursorInBounds[0] + ", " + cursorInBounds[1] + ", " + cursorInBounds[2] + "}";
+//                            if(inequalityGT[i][o]){
+//                                if((50 >= ((inequalities[i][o][0] * 50) + inequalities[i][o][1] * 100))){
+//                                    cursorInBounds[o] = true;
+////                                    System.out.println((Math.round(inequalities[i][o][1] * 100) / 100.0));
+//                                }
+//                            }else{
+//                                if((50 <= ((inequalities[i][o][0] * 50) + inequalities[i][o][1] * 100))){
+//                                    cursorInBounds[o] = true;
+////                                    System.out.println((Math.round(inequalities[i][o][1] * 100) / 100.0));
+//                                }
+//                            }
+                            }
+                        }
+                        if((withinBounds[0] && withinBounds[1] && withinBounds[2])){
+                            intersectionsOnScreen.add(iOnScreen);
+//                        if(rightMouseHeld){
+//                            System.out.println();
+//                        }
+                        }else{
+                            intersections.remove(j);
+//                        if(rightMouseHeld){
+//                            System.out.println();
+//                        }
+                        }
                     }
                 }
+                worldTris.get(i).setIntersectionPoints(intersections.toArray(new double[intersections.size()][4]));
+                worldTris.get(i).setIPointsOnScreen(intersectionsOnScreen.toArray(new double[intersectionsOnScreen.size()][3]));
             }
-            editTri.setIntersectionPoints(intersections.toArray(new double[intersections.size()][3]));
-            editTri.setIPointsOnScreen(intersectionsOnScreen.toArray(new double[intersectionsOnScreen.size()][2]));
-            worldTris.set(i,editTri);
         }
+    }
+
+    public static double round(double value, int DP){
+        return Math.round(value * (10 ^ DP)) / (double) (10 ^ DP);
+    }
+
+    public static double[][] eulerAngleCalc(){
+        double yaw = -cameraAngle[0];
+        double pitch = 90;
+        double roll = cameraAngle[1];
+
+        double cosA = Math.sin(Math.toRadians(pitch));
+        double sinA = Math.cos(Math.toRadians(pitch));
+
+        double cosB = Math.sin(Math.toRadians(roll));
+        double sinB = Math.cos(Math.toRadians(roll));
+
+        double cosC = Math.cos(Math.toRadians(yaw));
+        double sinC = Math.sin(Math.toRadians(yaw));
+
+        double[][] mA = new double[][]{
+                {cosA, -sinA, 0},
+                {sinA, cosA, 0},
+                {0, 0, 1}
+        };
+
+        double[][] mB = new double[][]{
+                {1, 0, 0},
+                {0, cosB, -sinB},
+                {0, sinB, cosB}
+        };
+
+        double[][] mC = new double[][]{
+                {cosC, -sinC, 0},
+                {sinC, cosC, 0},
+                {0, 0, 1}
+        };
+
+        double[][] m2 = multiplyMatrices(mC, mB);
+
+        return multiplyMatrices(m2, mA);
+    }
+
+    public static double[] rotatePoint(double[][] coords,double[][] coordsM, int j, double[][] m3){
+        double[] coordsTranslated;
+
+        double px = coords[j][0] - cameraPos[0] + coordsM[j][0];
+        double py = coords[j][1] - cameraPos[1] + coordsM[j][1];
+        double pz = coords[j][2] - cameraPos[2] + coordsM[j][2];
+
+        coordsTranslated = new double[3];
+        double a = m3[0][0];
+        double b = m3[1][0];
+        double c = m3[2][0];
+        double d = m3[0][1];
+        double e = m3[1][1];
+        double f = m3[2][1];
+        double g = m3[0][2];
+        double h = m3[1][2];
+        double ii = m3[2][2];
+
+        coordsTranslated[0] = (a * px + b * pz + c * py);
+        coordsTranslated[1] = (d * px + e * pz + f * py);
+        coordsTranslated[2] = (g * px + h * pz + ii * py);
+
+        return coordsTranslated;
     }
 
     public static void sortWorld(){
@@ -1550,25 +1949,27 @@ public class Main extends Application {
         boolean[] checks = new boolean[world.size() - 1];
         Quad tempQuad;
         int pointer = 0;
-        do{
-            pointer++;
-            if(pointer == world.size()){
-                pointer = 1;
-            }
-            if(world.get(pointer - 1).distanceToCamera < world.get(pointer).distanceToCamera){
-                tempQuad = world.get(pointer - 1);
-                world.set(pointer - 1, world.get(pointer));
-                world.set(pointer, tempQuad);
-            }
-            checks[pointer - 1] = true;
-            sorted = true;
-            for (int i = 0; i < world.size() - 1; i++) {
-                if(!checks[i]){
-                    sorted = false;
-                    break;
+        if(quadCount > 1){
+            do{
+                pointer++;
+                if(pointer == world.size()){
+                    pointer = 0;
                 }
-            }
-        }while(!sorted);
+                if(world.get(pointer - 1).distanceToCamera < world.get(pointer).distanceToCamera){
+                    tempQuad = world.get(pointer - 1);
+                    world.set(pointer - 1, world.get(pointer));
+                    world.set(pointer, tempQuad);
+                }
+                checks[pointer - 1] = true;
+                sorted = true;
+                for (int i = 0; i < world.size() - 1; i++) {
+                    if(!checks[i]){
+                        sorted = false;
+                        break;
+                    }
+                }
+            }while(!sorted);
+        }
 
         boolean sortedT;
         boolean[] checksT = new boolean[worldTris.size() - 1];
@@ -1788,6 +2189,7 @@ class Tri{
     protected double[] centreOfTriOnScreen;
     protected double[][] intersectionPoints;
     protected double[][] iPointsOnScreen;
+    protected Text[] iInfo;
     protected double distanceToCamera;
     protected int selectedPoint;
     protected double[][] pointsMovement;
@@ -1797,6 +2199,12 @@ class Tri{
     protected boolean hidden;
     protected double[] planeEq;
     protected double[][] edgeLines;
+    protected boolean split;
+    protected Tri[] subTris;
+    protected int overLappedBy;
+    protected int overLapping;
+    protected double[][] overlapPoints;
+
 
     public Tri(int Id, double[][] coords, double[][] points, double[] centre, double[] centreScreen, double distance, Color col, int[] aT, boolean h){
         ID = Id;
@@ -1813,6 +2221,9 @@ class Tri{
         hidden = h;
         planeEq = new double[4];
         edgeLines = new double[3][2];
+        split = false;
+        overLappedBy = 0;
+        overLapping = 0;
     }
 
     public void setPointsScreen(double[][] newPoints){
@@ -1839,12 +2250,28 @@ class Tri{
         iPointsOnScreen = iPOS;
     }
 
+    public void setIInfo(Text[] i){
+        iInfo = i;
+    }
+
     public void setDistance(double newDistance){
         distanceToCamera = newDistance;
     }
 
     public void setColour(Color newColour){
         colour = newColour;
+    }
+
+    public void setSplit(boolean s){
+        split = s;
+    }
+
+    public void setSubTris(Tri[] sT){
+        subTris = sT;
+    }
+
+    public void setOverlapPoints(double[][] oP){
+        overlapPoints = oP;
     }
 }
 
@@ -1925,6 +2352,7 @@ class CustomImage {
     protected boolean transitioning = false;
     protected boolean moving = false;
     protected double speedMultiplier;
+    protected boolean enabled;
 
     public CustomImage(Image i, double d, double rD, double op, double tx, double ty, double sM){
         image = i;
@@ -1941,9 +2369,11 @@ class CustomImage {
         rightDistance = rD;
         translateX = tx;
         translateY = ty;
+        imageView.setTranslateX(translateX);
         imageView.setTranslateY(translateY);
         imageView.setOpacity(opacity);
         speedMultiplier = sM;
+        enabled = true;
     }
 
     public void changeImage(Image newImage){
@@ -2087,11 +2517,17 @@ class ListMap{
     protected boolean transitioning = false;
     protected Group map;
     protected int theta2;
+    protected int theta3;
     protected double raisedPixels;
+    protected double pagePixels;
     protected boolean selected;
     protected File mapFile;
+    protected int xPos;
+    protected int yPos;
+    protected int page;
+    protected int[] rowCol;
 
-    public ListMap(String t, String desc1, String desc2, Image b, Image bS, Image i, String pN){
+    public ListMap(String t, String desc1, String desc2, Image b, Image bS, Image i, String pN, int p, int row, int column){
         title = t;
         theta1 = 0;
         theta2 = 0;
@@ -2117,6 +2553,12 @@ class ListMap{
         base = new ImageView(baseImage);
         iconImage = i;
         icon = new ImageView(iconImage);
+        if(iconImage.getWidth() != 64){
+            icon.setFitWidth(64);
+        }
+        if(iconImage.getHeight() != 64){
+            icon.setFitHeight(64);
+        }
         map = new Group(base);
         map.getChildren().add(titleText);
         map.getChildren().add(descText1);
@@ -2125,6 +2567,15 @@ class ListMap{
         map.setOpacity(opacity);
         selected = false;
         mapFile = new File(pN);
+        xPos = 0;
+        yPos = 0;
+        page = p;
+        rowCol = new int[]{row, column};
+        if(page == 1){
+            theta3 = 90;
+        }else{
+            theta3 = 0;
+        }
     }
 
     public void enterAnim(){
@@ -2149,11 +2600,51 @@ class ListMap{
         }
     }
 
+    public void pageInFromLeft(){
+        if(theta3 < 90){
+            theta3 += Main.buttonSpeed;
+            pagePixels = ((Math.sin(Math.toRadians(theta3)) / 2) + 0.5) * 15;
+            opacity = Math.sin(Math.toRadians(theta3));
+            map.setTranslateX(xPos + pagePixels);
+            map.setOpacity(opacity);
+        }
+    }
+
+    public void pageOutToLeft(){
+        if(theta3 > 0){
+            theta3 -= Main.buttonSpeed;
+            pagePixels = ((Math.sin(Math.toRadians(theta3)) / 2) + 0.5) * 15;
+            map.setTranslateX(xPos + pagePixels);
+            opacity = Math.sin(Math.toRadians(theta3));
+            map.setOpacity(opacity);
+        }
+    }
+
+    public void pageInFromRight(){
+        if(theta3 < 90){
+            theta3 += Main.buttonSpeed;
+            pagePixels = ((Math.sin(Math.toRadians(theta3)) / 2) + 0.5) * 15;
+            opacity = Math.sin(Math.toRadians(theta3));
+            map.setTranslateX(xPos - pagePixels);
+            map.setOpacity(opacity);
+        }
+    }
+
+    public void pageOutToRight(){
+        if(theta3 > 0){
+            theta3 -= Main.buttonSpeed;
+            pagePixels = ((Math.sin(Math.toRadians(theta3)) / 2) + 0.5) * 15;
+            opacity = Math.sin(Math.toRadians(theta3));
+            map.setTranslateX(xPos - pagePixels);
+            map.setOpacity(opacity);
+        }
+    }
+
     public void hoverAnimUp(){
         if(theta2 < 180){
             theta2 += Main.buttonSpeed;
             raisedPixels = ((Math.sin(Math.toRadians(theta2 - 90)) / 2) + 0.5) * 10;
-            map.setTranslateY(-raisedPixels);
+            map.setTranslateY(-raisedPixels + yPos);
         }
     }
 
@@ -2161,7 +2652,7 @@ class ListMap{
         if(theta2 > 0){
             theta2 -= Main.buttonSpeed;
             raisedPixels = ((Math.sin(Math.toRadians(theta2 - 90)) / 2) + 0.5) * 10;
-            map.setTranslateY(-raisedPixels);
+            map.setTranslateY(-raisedPixels + yPos);
         }
     }
 
@@ -2175,5 +2666,12 @@ class ListMap{
                 base.setImage(baseImage);
             }
         }
+    }
+
+    public void updatePos(){
+        pagePixels = ((Math.sin(Math.toRadians(theta3)) / 2) + 0.5) * 15;
+        map.setTranslateX(xPos + pagePixels);
+        map.setTranslateY(yPos);
+        map.setOpacity(opacity);
     }
 }
