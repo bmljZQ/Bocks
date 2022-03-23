@@ -1,8 +1,8 @@
 package com.company;
 
-//A-Level Computer Science NEA Project by Mark Connolly 2021-2022.
+// A-Level Computer Science NEA Project by Mark Connolly 2021-2022.
 
-//Import statements.
+// Import statements.
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
@@ -47,7 +47,7 @@ import java.util.BitSet;
 
 public class Main extends Application {
 
-    //Codes to colour the output text in the console.
+    // Codes to colour the output text in the console.
     public static final String ANSI_RESET = "\u001B[0m";
     public static final String ANSI_BLACK = "\u001B[30m";
     public static final String ANSI_RED = "\u001B[31m";
@@ -58,7 +58,7 @@ public class Main extends Application {
     public static final String ANSI_CYAN = "\u001B[36m";
     public static final String ANSI_WHITE = "\u001B[37m";
 
-    //Constant strings, most are used to identify which scene is being shown or which part of the map is being read.
+    // Constant strings, most are used to identify which scene is being shown or which part of the map is being read.
     public static final String TITLE = "Bocks";
     public static final String MAIN_MENU = "Main menu";
     public static final String MAP_SELECT = "Map select";
@@ -134,7 +134,7 @@ public class Main extends Application {
     public static String intersectionInfo;
     public Pane pane;
 
-    //Hard-coded data on how to draw the arrows when moving a point in the game, stored in an array.
+    // Hard-coded data on how to draw the arrows when moving a point in the game, stored in an array.
     public static final Quad[] axisArrows = {
             new Quad(-1, new double[][]{
                     {0.5, 0.05, 0},
@@ -217,7 +217,8 @@ public class Main extends Application {
 
     /**
      * Maps details are loaded from the folder here, it takes in a few resources so it can create the ListMap custom objects,
-     *     then returns a dynamic array of said custom object containing the title, description, and icon of every map in the maps folder.
+     * then returns a dynamic array of said custom object containing the title, description, and icon of every map in the maps folder.
+     * There is some support in this method for multiple pages of maps, but it is not enabled due to t being unfinished.
      * @param mapBase GUI background for an unselected map.
      * @param mapBaseSelected GUI background for a selected map.
      * @param defaultMapIcon Default map icon if none is found in the file.
@@ -240,7 +241,7 @@ public class Main extends Application {
             for (Path path : stream){
                 j++;
                 if (!Files.isDirectory(path)) {
-                    //Variable initialisation.
+                    // Variable initialisation.
                     title = "Untitled map";
                     description = new String[]{"",""};
                     iconPath = "None";
@@ -248,7 +249,7 @@ public class Main extends Application {
                     titleFound = false;
                     descriptionFound = false;
                     iconPathFound = false;
-                    //A while loop to read the file until it has found the data it needs or if it reaches the end of the file.
+                    // A while loop to read the file until it has found the data it needs or if it reaches the end of the file.
                     while(!titleFound || !descriptionFound || !iconPathFound){
                         String readLine = reader.readLine();
                         if(readLine != null){
@@ -276,7 +277,7 @@ public class Main extends Application {
                                 iconPathFound = true;
                             }
                         }else{
-                            //Reaching the end of the file breaks the loop here, and sets the unfound data to defaults later on.
+                            // Reaching the end of the file breaks the loop here, and sets the unfound data to defaults later on.
                             break;
                         }
                     }
@@ -285,18 +286,21 @@ public class Main extends Application {
                     }else{
                         icon = defaultMapIcon;
                     }
-                    //Calculations to decide which page to place the new map file on in the map select menu.
+                    // Calculations to decide which page to place the new map file on in the map select menu.
                     int page = Integer.parseInt(Double.toString((j / 9.0) + 1).split("\\.")[0]);
                     if(j % 9 == 0){
                         page--;
                     }
                     mapList.add(new ListMap(title, description[0], description[1], mapBase, mapBaseSelected, icon, path.toString(), page, (int) ((j + 1) % 3.0) + 1, (int) Double.parseDouble(Double.toString(((j + 1) / 3.0)).split("\\.")[0])));
+                    if(j == 10){
+                        break;
+                    }
                 }
             }
         }catch(IOException e){
             reportError("Error loading all maps.", e);
         }
-        //Calculations to find out how many pages are needed to contain all the maps.
+        // Calculations to find out how many pages are needed to contain all the maps.
         double maxPagesDouble = mapList.size() / 9.0;
         if(Math.round(maxPagesDouble) == maxPagesDouble){
             maxPages = (int) maxPagesDouble;
@@ -312,7 +316,7 @@ public class Main extends Application {
      * @throws InterruptedException The loading bar rarely encounters an exception with the loading bar text, which proves to be practically unfixable
      */
     private static void loadMap(File mapFile) throws InterruptedException {
-        //Variable initialisation.
+        // Variable initialisation.
         loading = true;
         int linesRead = 0;
         loadingText.setOpacity(1);
@@ -337,7 +341,7 @@ public class Main extends Application {
         try{
             reader = new BufferedReader(new FileReader(mapFile));
             do{
-                //Reading the next line in the file and identifying which part is being read.
+                // Reading the next line in the file and identifying which part is being read.
                 readLine = reader.readLine().trim();
                 loadingBarAnimation();
                 if(readLine.contains("<World>") || readLine.contains("<world>")){
@@ -347,21 +351,21 @@ public class Main extends Application {
                 }else if(readLine.contains("<Lights>") || readLine.contains("<lights>")){
                     currentlyReading = R_LIGHTS;
                 }
-                //If the line contains a closing bracket, increment the bracket counter.
+                // If the line contains a closing bracket, increment the bracket counter.
                 if(readLine.contains("}")){
                     currentlyReading = "";
                     bracketNo++;
                 }
-                //If the bracket counter reaches three, terminate the loop after this iteration as the end of the file has been reached.
+                // If the bracket counter reaches three, terminate the loop after this iteration as the end of the file has been reached.
                 if(bracketNo == 3){
                     endLoop = true;
                 }
-                //Create a delay if the fake loading time boolean is true, used to test the loading bar visuals at an observable speed.
+                // Create a delay if the fake loading time boolean is true, used to test the loading bar visuals at an observable speed.
                 if(fakeLoadingTime){
                     Thread.sleep(33);
                 }
                 loadingBarAnimation();
-                //If the read line contains square brackets, it is world data and therefore is added to the respective dynamic array of strings.
+                // If the read line contains square brackets, it is world data and therefore is added to the respective dynamic array of strings.
                 if(readLine.startsWith("[") && readLine.endsWith("]")){
                     switch (currentlyReading) {
                         case R_WORLD:
@@ -387,7 +391,7 @@ public class Main extends Application {
             reportError("Error counting the lines in the map file.", e);
         }
 
-        //Variable initialisation for organising the read data.
+        // Variable initialisation for organising the read data.
         quadCount = worldStrings.size();
         objectCount = objectStrings.size();
         lightCount = lightStrings.size();
@@ -406,8 +410,10 @@ public class Main extends Application {
         updateLoadingContext("Indexing world " +
                 "\n geometry.");
         for (int i = 0; i < quadCount; i++) {
-            //Algorithm to convert the strings to doubles and store them in the correct places inside the Quad and Tri custom objects.
-            //This idea is the same for the other two types of map data (objects and lights).
+            /*
+             * Algorithm to convert the strings to doubles and store them in the correct places inside the Quad and Tri custom objects.
+             * This idea is the same for the other two types of map data (objects and lights).
+             */
             tempColourString = worldStrings.get(i).split("¦")[1].split(",");
             tempCoordinates[i] = worldStrings.get(i).split("¦")[0].split("/");
             for (int j = 0; j < 4; j++) {
@@ -470,8 +476,6 @@ public class Main extends Application {
         String[][] posString = new String[lightCount][3];
         String[][] lightData = new String[lightCount][3];
         double[] brightnesses = new double[lightCount];
-        String[][] colourData = new String[lightCount][3];
-        Color[] colours = new Color[lightCount];
         updateLoadingContext("Indexing lights.");
         for (int i = 0; i < lightCount; i++) {
             lightData[i] = lightStrings.get(i).split("/");
@@ -480,10 +484,8 @@ public class Main extends Application {
                 pos[i][j] = Double.parseDouble(posString[i][j]);
             }
             brightnesses[i] = Double.parseDouble(lightData[i][1]);
-            colourData[i] = lightData[i][2].split(",");
-            colours[i] = Color.color(Double.parseDouble(colourData[i][0]) / 255, Double.parseDouble(colourData[i][1]) / 255, Double.parseDouble(colourData[i][2]) / 255);
 
-            lights.add(new Light(i, pos[i], brightnesses[i], colours[i]));
+            lights.add(new Light(i, pos[i], brightnesses[i]));
             if(fakeLoadingTime){
                 Thread.sleep(100);
             }
@@ -498,7 +500,7 @@ public class Main extends Application {
     }
 
     /**
-     * Simply deletes all map data when exiting a map.
+     * Simply wipes all map data when exiting a map from the variables.
      */
     public static void unloadMap(){
         mapLoaded = false;
@@ -573,7 +575,7 @@ public class Main extends Application {
     @Override
     public void start(Stage primaryStage) throws Exception {
 
-        //Initialisation of the game canvas and graphics context.
+        // Initialisation of the game canvas and graphics context.
         Canvas canvas = new Canvas(resolutionWidth, resolutionHeight);
         GraphicsContext gc = canvas.getGraphicsContext2D();
 //        System.out.println(javafx.scene.text.Font.getFamilies());
@@ -581,8 +583,9 @@ public class Main extends Application {
         GridPane mapSelectBox = new GridPane();
         menuBox.setAlignment(Pos.TOP_CENTER);
         mapSelectBox.setAlignment(Pos.CENTER_LEFT);
+        primaryStage.setResizable(false);
 
-        //Loading of all GUI element images.
+        // Loading of all GUI element images.
         File backgroundFile = new File("resources/background1.png");
         primaryStage.getIcons().add(new Image(new FileInputStream("resources/icon.png")));
         Image background = new Image(new FileInputStream(backgroundFile));
@@ -603,7 +606,7 @@ public class Main extends Application {
         Image leftButton = new Image(new FileInputStream("resources/Left_Button.png"));
         Image rightButton = new Image(new FileInputStream("resources/Right_Button.png"));
 
-        //Initialisation of loading bar elements, title, and background.
+        // Initialisation of loading bar elements, title, and background.
         emptyLoadingBar = new ImageView(emptyLoadingBarImage);
         loadingBar = new ImageView(loadingBarImage);
         CustomText title = new CustomText(TITLE, 300);
@@ -615,7 +618,7 @@ public class Main extends Application {
         title.text.setFill(Color.LIMEGREEN);
         Background boxesBackground = new Background(new BackgroundImage(background, BackgroundRepeat.NO_REPEAT, BackgroundRepeat.NO_REPEAT, BackgroundPosition.CENTER, new BackgroundSize((resolutionHeight / background.getHeight()), (resolutionWidth / background.getWidth()), true, true, false, false)));
 
-        //Creation of all image based GUI elements using a custom object 'CustomImage'.
+        // Creation of all image based GUI elements using a custom object 'CustomImage'.
         CustomImage mainMenuButton = new CustomImage(mainMenu, resolutionHeight + 200, 0, 1, 0, -200, 1);
         CustomImage mainMenuGameButton = new CustomImage(mainMenu, 0, 0, 0, 100, 200, 2);
         CustomImage mapSelectButton = new CustomImage(mapSelect, resolutionHeight + 200, 0, 1, 0, 0, 1);
@@ -632,19 +635,19 @@ public class Main extends Application {
         CustomImage rightScrollButton = new CustomImage(rightButton, resolutionHeight + 200, 0, 1, 550, 0, 1);
         buttonList = new CustomImage[]{mainMenuButton, mapSelectButton, optionsButton, exitButton, startButton, mainMenuGameButton, leftScrollButton, rightScrollButton};
 
-        //Loading map details.
+        // Loading map details.
         maps = loadMaps(mapBase, mapBaseSelected, defaultMapIcon);
 
-        //Designing of the main menu.
+        // Designing of the main menu.
         menuBox.setPadding(new Insets(30,0,10,0));
         menuBox.setSpacing(70);
         menuBox.getChildren().add(title.text);
         menuBox.getChildren().add(mapSelectButton.imageView);
-        menuBox.getChildren().add(optionsButton.imageView);
+//        menuBox.getChildren().add(optionsButton.imageView);
         menuBox.getChildren().add(exitButton.imageView);
         menuBox.setBackground(boxesBackground);
 
-        //Binding of controls to the scenes.
+        // Binding of controls to the scenes.
         Scene menuScene = new Scene(menuBox, resolutionWidth, resolutionHeight);
         pane = new Pane();
         pane.getChildren().add(canvas);
@@ -687,7 +690,7 @@ public class Main extends Application {
             }
         });
 
-        //Designing of the map selection scene.
+        // Designing of the map selection scene.
         mapSelectBox.setPadding(new Insets(10));
         mapSelectBox.setHgap(10);
         mapSelectBox.setVgap(20);
@@ -696,9 +699,9 @@ public class Main extends Application {
         mapSelectBox.add(leftMapsBracket.imageView,0,0);
         mapSelectBox.add(rightMapsBracket.imageView, 1, 0);
         mapSelectBox.add(mainMenuButton.imageView, 2, 0);
-        mapSelectBox.add(leftScrollButton.imageView, 1, 1);
+//        mapSelectBox.add(leftScrollButton.imageView, 1, 1);
         leftScrollButton.imageView.setTranslateX(700);
-        mapSelectBox.add(rightScrollButton.imageView, 1, 1);
+//        mapSelectBox.add(rightScrollButton.imageView, 1, 1);
         rightScrollButton.imageView.setTranslateX(800);
         mapSelectBox.add(startButton.imageView, 2, 0);
         mapSelectBox.setOnScroll(e -> {
@@ -714,7 +717,7 @@ public class Main extends Application {
                 }
             }
         });
-        //Placement of the maps in the map select menu.
+        // Placement of the maps in the map select menu.
         for (int i = 0; i < maps.size(); i++) {
             mapSelectBox.add(maps.get(i).map, 1, 0);
             maps.get(i).xPos = ((maps.get(i).rowCol[1] - 1) * 400) - 65;
@@ -728,13 +731,13 @@ public class Main extends Application {
         mapSelectBox.add(loadingBar, 1, 0);
         mapSelectBox.setBackground(boxesBackground);
 
-        //Initialisation of the in-game menu.
+        // Initialisation of the in-game menu.
         pane.getChildren().add(gameMenuBackground.imageView);
         pane.getChildren().add(mainMenuGameButton.imageView);
         pane.getChildren().add(leftMenuBracket.imageView);
         pane.getChildren().add(rightMenuBracket.imageView);
 
-        //Binding of functionality to GUI buttons and initialisation of debugging information.
+        // Binding of functionality to GUI buttons and initialisation of debugging information.
         debugText = new Text(0, 15, "No information available yet");
         debugText.setFont(javafx.scene.text.Font.font(Font.SANS_SERIF));
         pane.getChildren().add(debugText);
@@ -796,7 +799,7 @@ public class Main extends Application {
             }
         });
 
-        //Placement of many GUI elements.
+        // Placement of many GUI elements.
         title.text.setTranslateY(-title.distance);
         mapSelectButton.imageView.setTranslateY(mapSelectButton.distance);
         optionsButton.imageView.setTranslateY(optionsButton.distance);
@@ -834,6 +837,7 @@ public class Main extends Application {
         Timeline renderTimeline = new Timeline(
 
                 new KeyFrame(
+                        // The keyframe calling the gameplay related elements lasts zero seconds as to call said elements as quickly as possible.
                         Duration.ZERO,
                         event -> {
                             lastTime = System.nanoTime();
@@ -847,7 +851,7 @@ public class Main extends Application {
                             FPS = (Math.round(FPSLong * 10)) / 10.0;
                 }),
                 new KeyFrame(
-                        //The keyframe of every GUI element lasts a certain interval of time so the target number of frames per second can be reached.
+                        // The keyframe of every GUI element lasts a certain interval of time so the target number of frames per second can be reached.
                         Duration.seconds(1.0 / targetFPS),
                         event -> {
                             if(focusedWindow.equals(MAIN_MENU) && !rightMapsBracket.transitioning){
@@ -1090,74 +1094,87 @@ public class Main extends Application {
         return null;
     }
 
+    /**
+     * This method is responsible for drawing every frame.
+     * @param gc Graphics Context used to draw
+     * @param canvasWidth The width of the canvas
+     * @param canvasHeight The height of the canvas
+     * @param DZ The variable used to project 3D points to a 2D screen
+     * @param coordsT The coordinates of the geometry after being rotated and moved
+     * @param distanceToScreen The theoretical pixel distance between the camera and the game window
+     * @param distancesToPoints The distances to every point in the world geometry
+     */
 
     private static void draw(GraphicsContext gc, double canvasWidth, double canvasHeight, double DZ, double[][][] coordsT, double distanceToScreen, double[][] distancesToPoints) {
+        /* Experimental methods involving the next steps in a possible version 1.1.
+        double[][][] inequalities = new double[triCount][3][2];
+        int jPlus1;
+        int nPlus1;
 
+        Tri altTri;
+        for (int i = 0; i < triCount; i++) {
+            currentTri = worldTris.get(i);
+            for (int j = 0; j < 3; j++) {
+                jPlus1 = j + 1;
+                if(jPlus1 > 2){
+                    jPlus1 -= 3;
+                }
+                inequalities[i][j][0] = ((currentTri.pointsOnScreen[jPlus1][1] + (resolutionHeight / 2.0)) - (currentTri.pointsOnScreen[j][1] + (resolutionHeight / 2.0))) / ((currentTri.pointsOnScreen[jPlus1][0] + (resolutionWidth / 2.0)) - (currentTri.pointsOnScreen[j][0] + (resolutionWidth / 2.0)));
+                inequalities[i][j][1] = ((currentTri.pointsOnScreen[j][1] + (resolutionHeight / 2.0)) - (inequalities[i][j][0] * (currentTri.pointsOnScreen[j][0] + (resolutionWidth / 2.0))));
+            }
+        }
 
+        boolean inFrontOfCameraAlt;
+        for (int i = 0; i < triCount; i++) {
+            ArrayList<double[]> overlaps = new ArrayList<>();
+            currentTri = worldTris.get(i);
+            inFrontOfCamera = currentTri.centreOfTri[2] > 0;
+            for (int j = 0; j < triCount; j++) {
+                inFrontOfCameraAlt = worldTris.get(j).centreOfTri[2] > 0;
+                for (int k = 0; k < 3; k++) {
+                    int lPlus1;
+                    for (int l = 0; l < 3; l++) {
+                        lPlus1 = l + 1;
+                        if(lPlus1 >= 3){
+                            lPlus1 -= 3;
+                        }
+                        if(inFrontOfCamera && inFrontOfCameraAlt){
+                            if(round(inequalities[j][l][0], 1) != round(inequalities[i][k][0], 1)){
+                                double pointX = ((inequalities[i][k][1] - inequalities[j][l][1]) / (inequalities[j][l][0] - inequalities[i][k][0]));
+                                double[] point = {pointX, ((inequalities[i][k][0] * pointX) + inequalities[i][k][1]), j, k, l};
 
-        //        double[][][] inequalities = new double[triCount][3][2];
-//        int jPlus1;
-//        int nPlus1;
+                                boolean on1 = round(point[1], 1) == round((inequalities[i][k][0] * point[0]) + inequalities[i][k][1], 1);
+                                boolean on2 = round(point[1], 1) == round((inequalities[j][l][0] * point[0]) + inequalities[j][l][1], 1);
+                                int withinDP = 0;
+                                boolean withinX = (round(point[0], withinDP) > round(currentTri.pointsOnScreen[l][0] + (resolutionHeight / 2.0), withinDP) && round(point[0], withinDP) < round(currentTri.pointsOnScreen[lPlus1][0] + (resolutionHeight / 2.0), withinDP)) || (round(point[0], withinDP) < round(currentTri.pointsOnScreen[l][0] + (resolutionHeight / 2.0), withinDP) && round(point[0], withinDP) > round(currentTri.pointsOnScreen[lPlus1][0] + (resolutionHeight / 2.0), withinDP));
+                                boolean withinY = (round(point[1], withinDP) > round(currentTri.pointsOnScreen[l][1] + (resolutionHeight / 2.0), withinDP) && round(point[1], withinDP) < round(currentTri.pointsOnScreen[lPlus1][1] + (resolutionHeight / 2.0), withinDP)) || (round(point[1], withinDP) < round(currentTri.pointsOnScreen[l][1] + (resolutionHeight / 2.0), withinDP) && round(point[1], withinDP) > round(currentTri.pointsOnScreen[lPlus1][1] + (resolutionHeight / 2.0), withinDP));
+                                if(withinX && withinY && on1 && on2){
+                                    overlaps.add(point);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            worldTris.get(i).setOverlapPoints(overlaps.toArray(new double[overlaps.size()][5]));
+        }
+         */
+
         Tri currentTri;
-//        Tri altTri;
-//        for (int i = 0; i < triCount; i++) {
-//            currentTri = worldTris.get(i);
-//            for (int j = 0; j < 3; j++) {
-//                jPlus1 = j + 1;
-//                if(jPlus1 > 2){
-//                    jPlus1 -= 3;
-//                }
-//                inequalities[i][j][0] = ((currentTri.pointsOnScreen[jPlus1][1] + (resolutionHeight / 2.0)) - (currentTri.pointsOnScreen[j][1] + (resolutionHeight / 2.0))) / ((currentTri.pointsOnScreen[jPlus1][0] + (resolutionWidth / 2.0)) - (currentTri.pointsOnScreen[j][0] + (resolutionWidth / 2.0)));
-//                inequalities[i][j][1] = ((currentTri.pointsOnScreen[j][1] + (resolutionHeight / 2.0)) - (inequalities[i][j][0] * (currentTri.pointsOnScreen[j][0] + (resolutionWidth / 2.0))));
-//            }
-//        }
         boolean inFrontOfCamera;
-//        boolean inFrontOfCameraAlt;
-//        for (int i = 0; i < triCount; i++) {
-//            ArrayList<double[]> overlaps = new ArrayList<>();
-//            currentTri = worldTris.get(i);
-//            inFrontOfCamera = currentTri.centreOfTri[2] > 0;
-//            for (int j = 0; j < triCount; j++) {
-//                inFrontOfCameraAlt = worldTris.get(j).centreOfTri[2] > 0;
-//                for (int k = 0; k < 3; k++) {
-//                    int lPlus1;
-//                    for (int l = 0; l < 3; l++) {
-//                        lPlus1 = l + 1;
-//                        if(lPlus1 >= 3){
-//                            lPlus1 -= 3;
-//                        }
-//                        if(inFrontOfCamera && inFrontOfCameraAlt){
-//                            if(round(inequalities[j][l][0], 1) != round(inequalities[i][k][0], 1)){
-//                                double pointX = ((inequalities[i][k][1] - inequalities[j][l][1]) / (inequalities[j][l][0] - inequalities[i][k][0]));
-//                                double[] point = {pointX, ((inequalities[i][k][0] * pointX) + inequalities[i][k][1]), j, k, l};
-//
-//                                boolean on1 = round(point[1], 1) == round((inequalities[i][k][0] * point[0]) + inequalities[i][k][1], 1);
-//                                boolean on2 = round(point[1], 1) == round((inequalities[j][l][0] * point[0]) + inequalities[j][l][1], 1);
-//                                int withinDP = 0;
-//                                boolean withinX = (round(point[0], withinDP) > round(currentTri.pointsOnScreen[l][0] + (resolutionHeight / 2.0), withinDP) && round(point[0], withinDP) < round(currentTri.pointsOnScreen[lPlus1][0] + (resolutionHeight / 2.0), withinDP)) || (round(point[0], withinDP) < round(currentTri.pointsOnScreen[l][0] + (resolutionHeight / 2.0), withinDP) && round(point[0], withinDP) > round(currentTri.pointsOnScreen[lPlus1][0] + (resolutionHeight / 2.0), withinDP));
-//                                boolean withinY = (round(point[1], withinDP) > round(currentTri.pointsOnScreen[l][1] + (resolutionHeight / 2.0), withinDP) && round(point[1], withinDP) < round(currentTri.pointsOnScreen[lPlus1][1] + (resolutionHeight / 2.0), withinDP)) || (round(point[1], withinDP) < round(currentTri.pointsOnScreen[l][1] + (resolutionHeight / 2.0), withinDP) && round(point[1], withinDP) > round(currentTri.pointsOnScreen[lPlus1][1] + (resolutionHeight / 2.0), withinDP));
-//                                if(withinX && withinY && on1 && on2){
-//                                    overlaps.add(point);
-//                                }
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//            //TODO: Add checks to check if the point is in bounds.
-//            worldTris.get(i).setOverlapPoints(overlaps.toArray(new double[overlaps.size()][5]));
-//        }
-
-        //TODO: Calculate overlaps and draw intersections and said overlaps.
         double[][] pointsToUse = new double[2][3];
         double[][] aPointsToUse = new double[2][4];
         double colourBrightness;
         double[] colourRGB = new double[3];
+        double[] totalBrightnesses = new double[triCount];
+        Light currentLight;
         Color variableColour;
         gc.clearRect(0,0,canvasWidth,canvasHeight);
         gc.setFill(Color.GRAY);
         gc.fillRect(0,0,canvasWidth,canvasHeight);
 
+        // Drawing of the lines which pinpoint the points in the world geometry in debug mode.
         if(debugMode){
             for (int i = 0; i < triCount; i++) {
                 inFrontOfCamera = false;
@@ -1178,24 +1195,39 @@ public class Main extends Application {
                 }
             }
         }
+
         String debugInfo;
         String debugString;
+        /*
+         * The large 'for' loop which repeats for every world geometry element, calculates lighting,
+         * and draws every triangle in the world with the correct shape, colour, and circumstances.
+         * Debugging information is also compiled here and displayed if debug mode is on.
+         */
+
         for (int i = 0; i < triCount; i++) {
             inFrontOfCamera = false;
             currentTri = worldTris.get(i);
+
+            for (int j = 0; j < lightCount; j++) {
+                currentLight = lights.get(j);
+                double distance = Math.sqrt(((currentTri.coordinatesInWorld[0][0] - currentLight.pos[0]) * (currentTri.coordinatesInWorld[0][0] - currentLight.pos[0]))
+                        + ((currentTri.coordinatesInWorld[0][1] - currentLight.pos[1]) * (currentTri.coordinatesInWorld[0][1] - currentLight.pos[1]))
+                        + ((currentTri.coordinatesInWorld[0][2] - currentLight.pos[2]) * (currentTri.coordinatesInWorld[0][2] - currentLight.pos[2])));
+                totalBrightnesses[i] += currentLight.brightness / distance;
+            }
 
             if(!currentTri.hidden){
                 if(currentTri.centreOfTri[2] > 0){
                     inFrontOfCamera = true;
                 }
 
-                colourBrightness = 5 / currentTri.distanceToCamera;
-                if(colourBrightness > 1){
-                    colourBrightness = 1;
+//                colourBrightness = 5 / currentTri.distanceToCamera;
+                if(totalBrightnesses[i] > 1){
+                    totalBrightnesses[i] = 1;
                 }
-                colourRGB[0] = currentTri.colour.getRed() * colourBrightness;
-                colourRGB[1] = currentTri.colour.getGreen() * colourBrightness;
-                colourRGB[2] = currentTri.colour.getBlue() * colourBrightness;
+                colourRGB[0] = currentTri.colour.getRed() * totalBrightnesses[i];
+                colourRGB[1] = currentTri.colour.getGreen() * totalBrightnesses[i];
+                colourRGB[2] = currentTri.colour.getBlue() * totalBrightnesses[i];
                 variableColour = Color.color(colourRGB[0], colourRGB[1], colourRGB[2]);
                 for (int j = 0; j < 2; j++) {
                     for (int k = 0; k < 3; k++) {
@@ -1207,8 +1239,8 @@ public class Main extends Application {
                     }
                 }
                 try{
-                    debugInfo = "FPS: " + FPS +
-                            "\n F3 - Debug mode. V" +
+                    debugInfo = "F3 - Debug mode. V" +
+                            "\n FPS: " + FPS +
                             "\n (" + Math.round(currentTri.pointsOnScreen[0][0]) + ", " + Math.round(currentTri.pointsOnScreen[0][1]) + ") " +
                             "\n (" + Math.round(currentTri.pointsOnScreen[1][0]) + ", " + Math.round(currentTri.pointsOnScreen[1][1]) + ") " +
                             "\n (" + Math.round(currentTri.pointsOnScreen[2][0]) + ", " + Math.round(currentTri.pointsOnScreen[2][1]) + ") " +
@@ -1220,8 +1252,8 @@ public class Main extends Application {
                             "\n {" + draggingArrow[0] + ", " + draggingArrow[1] + ", " + draggingArrow[2] + "}" +
                             "\n Intersection Points: " + currentTri.iPointsOnScreen.length;
                 }catch(NullPointerException e){
-                    debugInfo = "FPS: " + FPS +
-                            "\n F3 - Debug mode. V" +
+                    debugInfo = "F3 - Debug mode. V" +
+                            "\n FPS: " + FPS +
                             "\n (" + Math.round(currentTri.pointsOnScreen[0][0]) + ", " + Math.round(currentTri.pointsOnScreen[0][1]) + ") " +
                             "\n (" + Math.round(currentTri.pointsOnScreen[1][0]) + ", " + Math.round(currentTri.pointsOnScreen[1][1]) + ") " +
                             "\n (" + Math.round(currentTri.pointsOnScreen[2][0]) + ", " + Math.round(currentTri.pointsOnScreen[2][1]) + ") " +
@@ -1238,8 +1270,7 @@ public class Main extends Application {
                     debugString = debugInfo + "\n \n" + arrowInfo + "\n \n" + intersectionInfo;
                     debugText.setText(debugString);
                 }else{
-                    debugText.setText("FPS: " + FPS +
-                            "\n F3 - Debug mode. >");
+                    debugText.setText("F3 - Debug mode. >");
                 }
 
                 gc.setStroke(Color.WHITE);
@@ -1297,21 +1328,26 @@ public class Main extends Application {
                 }
             }
         }
-        gc.setFill(Color.WHITE);
-        for (int i = 0; i < worldTris.size(); i++) {
-            currentTri = worldTris.get(i);
-            for (int j = 0; j < currentTri.iPointsOnScreen.length; j++) {
-                gc.fillOval(currentTri.iPointsOnScreen[j][0] - 5, currentTri.iPointsOnScreen[j][1] - 5, 10, 10);
+
+        if(debugMode){
+            gc.setFill(Color.FUCHSIA);
+            for (int i = 0; i < worldTris.size(); i++) {
+                currentTri = worldTris.get(i);
+                if(currentTri.iPointsOnScreen != null){
+                    for (int j = 0; j < currentTri.iPointsOnScreen.length; j++) {
+                        gc.fillOval(currentTri.iPointsOnScreen[j][0] - 5, currentTri.iPointsOnScreen[j][1] - 5, 10, 10);
+                    }
+                }
             }
         }
 
-        gc.setFill(Color.ORANGE);
-        for (int i = 0; i < worldTris.size(); i++) {
-            currentTri = worldTris.get(i);
-            for (int j = 0; j < currentTri.overlapPoints.length; j++) {
-                gc.fillOval(currentTri.overlapPoints[j][0] - 5, currentTri.overlapPoints[j][1] - 5, 10, 10);
-            }
-        }
+//        gc.setFill(Color.ORANGE);
+//        for (int i = 0; i < worldTris.size(); i++) {
+//            currentTri = worldTris.get(i);
+//            for (int j = 0; j < currentTri.overlapPoints.length; j++) {
+//                gc.fillOval(currentTri.overlapPoints[j][0] - 5, currentTri.overlapPoints[j][1] - 5, 10, 10);
+//            }
+//        }
 
         Quad aCurrentQuad;
         Quad aOtherQuad;
@@ -1374,6 +1410,13 @@ public class Main extends Application {
         }
     }
 
+    /**
+     * Most of the mathematical calculations are contained here to project and translate world geometry.
+     * @param gc Graphics Context to be passed onto the draw method
+     * @param canvasWidth The width of the canvas
+     * @param canvasHeight The height of the canvas
+     */
+
     private static void render(GraphicsContext gc, double canvasWidth, double canvasHeight) {
         double[][][] pointsOnScreen = new double[triCount][3][2];
         double[][] centresOfShapes = new double[triCount][3];
@@ -1402,10 +1445,9 @@ public class Main extends Application {
 
         for (int i = 0; i < triCount; i++) {
             currentTri = worldTris.get(i);
+            // Rotation and managing the anchoring feature.
             for (int j = 0; j < 3; j++) {
                 distancesToPoints[i][j] = Math.sqrt(((currentTri.coordinatesInWorld[j][0] - cameraPos[0]) * (currentTri.coordinatesInWorld[j][0] - cameraPos[0])) + ((currentTri.coordinatesInWorld[j][1] - cameraPos[1]) * (currentTri.coordinatesInWorld[j][1] - cameraPos[1])) + ((currentTri.coordinatesInWorld[j][2] - cameraPos[2]) * (currentTri.coordinatesInWorld[j][2] - cameraPos[2])));
-
-
 
                 if(currentTri.anchoredTo[0] > 0){
                     for (Tri tris : worldTris) {
@@ -1472,7 +1514,7 @@ public class Main extends Application {
                     }
                 }
 
-                coordsTranslated[i][j] = rotatePoint(currentTri.coordinatesInWorld, currentTri.pointsMovement, j, eulerMatrix);
+                coordsTranslated[i][j] = rotatePoint(currentTri.coordinatesInWorld[j], currentTri.pointsMovement[j], eulerMatrix);
 
                 DZConstant = distanceToScreen / (coordsTranslated[i][j][2]);
                 if(DZConstant > 0){
@@ -1483,6 +1525,7 @@ public class Main extends Application {
                 }
 
             }
+            // Projection of points to game window.
             for (int j = 0; j < 3; j++) {
                 centresOfShapes[i][j] = coordsTranslated[i][0][j] + ((coordsTranslated[i][2][j] - coordsTranslated[i][0][j]) / 2.0);
             }
@@ -1514,6 +1557,7 @@ public class Main extends Application {
         double aDZConstant;
         double aCentreDZ;
         Quad aCurrentQuad;
+        // Similar code as above, only supporting the Quad object instead of the Tri object to draw the editing arrows.
         for (int i = 0; i < axisArrows.length; i++) {
             aCurrentQuad = axisArrows[i];
             for (int j = 0; j < 4; j++) {
@@ -1529,7 +1573,7 @@ public class Main extends Application {
                     }
                 }
 
-                arrowCoordsTranslated[j] = rotatePoint(aCurrentQuad.coordinatesInWorld, aCurrentQuad.pointsMovement, j, eulerMatrix);
+                arrowCoordsTranslated[j] = rotatePoint(aCurrentQuad.coordinatesInWorld[j], aCurrentQuad.pointsMovement[j], eulerMatrix);
 
                 aDZConstant = distanceToScreen / (arrowCoordsTranslated[j][2]);
                 if(aDZConstant > 0){
@@ -1562,6 +1606,12 @@ public class Main extends Application {
         draw(gc, canvasWidth, canvasHeight, DZConstant, coordsTranslated, distanceToScreen, distancesToPoints);
     }
 
+    /**
+     * An experimental method which finds where world geometry would intersect.
+     * These intersection points are viewable in debug mode.
+     * @param distanceToScreen The theoretical distance in pixels between the camera and the game window
+     */
+
     public static void findIntersections(double distanceToScreen){
         double[][] distancesBetweenPAndC = new double[triCount][3];
         Tri currentTri;
@@ -1584,18 +1634,18 @@ public class Main extends Application {
         boolean[][] inequalityGT = new boolean[triCount][3];
         double[][] eulerMatrix = eulerAngleCalc();
 
-        for (int i = 0; i < triCount; i++) {
-            currentTri = worldTris.get(i);
-            for (int j = 0; j < 3; j++) {
-                double[] centreTranslated = rotatePoint(new double[][]{currentTri.centreOfTri}, new double[1][3], 0, eulerMatrix);
-                cameraToCentreLines[i][j][0] = centreTranslated[j];
-                cameraToCentreLines[i][j][1] = (cameraPos[j]) - (centreTranslated[j]);
-            }
-        }
+//        for (int i = 0; i < triCount; i++) {
+//            currentTri = worldTris.get(i);
+//            for (int j = 0; j < 3; j++) {
+//                double[] centreTranslated = rotatePoint(new double[][]{currentTri.centreOfTri}, new double[1][3], 0, eulerMatrix);
+//                cameraToCentreLines[i][j][0] = centreTranslated[j];
+//                cameraToCentreLines[i][j][1] = (cameraPos[j]) - (centreTranslated[j]);
+//            }
+//        }
 
         for (int i = 0; i < triCount; i++) {
             currentTri = worldTris.get(i);
-            if(distancesBetweenPAndC[i][0] < 3 && distancesBetweenPAndC[i][1] < 3 && distancesBetweenPAndC[i][2] < 3){
+//            if(distancesBetweenPAndC[i][0] < 3 && distancesBetweenPAndC[i][1] < 3 && distancesBetweenPAndC[i][2] < 3){
                 double[][] planeCoordsToIntersect;
                 double[][] lineCoordsToIntersect;
                 int jPlus1;
@@ -1667,21 +1717,23 @@ public class Main extends Application {
                         }
                     }
 
-//                    double a2 = cameraToCentreLines[m][0][0];
-//                    double b2 = cameraToCentreLines[m][0][1];
-//                    double c2 = cameraToCentreLines[m][1][0];
-//                    double d2 = cameraToCentreLines[m][1][1];
-//                    double e2 = cameraToCentreLines[m][2][0];
-//                    double f2 = cameraToCentreLines[m][2][1];
-//
-//                    double t2 = ((g * a2) + (h * c2) + (ii * e2) - k) / ((g * b2) + (h * d2) + (ii * f2));
-//
-//                    double[] point2;
-//                    if(t2 != Double.POSITIVE_INFINITY && !Double.isNaN(t2) && t2 != Double.NEGATIVE_INFINITY){
-//                        point2 = new double[]{a2 - (b2 * t2), c2 - (d2 * t2), e2 - (f2 * t2)};
-//
-//                        otherPlaneIntersections.add(point2);
-//                    }
+                    /*
+                    double a2 = cameraToCentreLines[m][0][0];
+                    double b2 = cameraToCentreLines[m][0][1];
+                    double c2 = cameraToCentreLines[m][1][0];
+                    double d2 = cameraToCentreLines[m][1][1];
+                    double e2 = cameraToCentreLines[m][2][0];
+                    double f2 = cameraToCentreLines[m][2][1];
+
+                    double t2 = ((g * a2) + (h * c2) + (ii * e2) - k) / ((g * b2) + (h * d2) + (ii * f2));
+
+                    double[] point2;
+                    if(t2 != Double.POSITIVE_INFINITY && !Double.isNaN(t2) && t2 != Double.NEGATIVE_INFINITY){
+                        point2 = new double[]{a2 - (b2 * t2), c2 - (d2 * t2), e2 - (f2 * t2)};
+
+                        otherPlaneIntersections.add(point2);
+                    }
+                     */
 
                     for (int j = 0; j < 3; j++) {
 
@@ -1712,80 +1764,80 @@ public class Main extends Application {
                     double oIntersectionDZ;
                     double[] oIOnScreen;
                     double[] oIXY;
-//
-//                    if(i != m){
-//                        for (int j = 0; j < otherPlaneIntersections.size(); j++) {
-//                            oIXY = new double[2];
-//                            oIntersectionDZ = distanceToScreen / otherPlaneIntersections.get(j)[2];
-//                            if(oIntersectionDZ > 0){
-//                                oIntersectionDZ *= -1;
-//                            }
-//                            for (int l = 0; l < 2; l++) {
-//                                oIXY[l] = otherPlaneIntersections.get(j)[l];
-//                            }
-//                            oIOnScreen = new double[]{(oIXY[0] * oIntersectionDZ) + (resolutionWidth / 2.0), (oIXY[1] * oIntersectionDZ) + (resolutionHeight / 2.0), altTri.ID};
-//
-//                            boolean[] withinBounds;
-//                            withinBounds = new boolean[]{false, false, false};
-//                            int oPlus1;
-//                            for (int o = 0; o < 3; o++) {
-//                                oPlus1 = o + 1;
-//                                if(oPlus1 >= 3){
-//                                    oPlus1 -= 3;
-//                                }
-//                                if(inequalityGT[i][o]){
-//                                    if((round(oIOnScreen[1], 4) >= round(((inequalities[i][o][0] * oIOnScreen[0]) + inequalities[i][o][1]), 4))){
-//                                        withinBounds[o] = true;
-//                                    }
-//                                }else{
-//                                    if((round(oIOnScreen[1], 4) <= round(((inequalities[i][o][0] * oIOnScreen[0]) + inequalities[i][o][1]), 4))){
-//                                        withinBounds[o] = true;
-//                                    }
-//                                }
-//                            }
-//                            if((withinBounds[0] && withinBounds[1] && withinBounds[2])){
-//                                otherIntersectionsOnScreen.add(oIOnScreen);
-//                            }else{
-//                                otherPlaneIntersections.remove(j);
-//                            }
-//
-//                            //TODO: Continue making the overlap prioritiser.
-//                        }
-//                    }
-//
-//                    double[] distancesToPoints = new double[otherIntersectionsOnScreen.size()];
-//
-//                    for (int j = 0; j < otherIntersectionsOnScreen.size(); j++) {
-//                        distancesToPoints[j] = Math.sqrt(((otherIntersectionsOnScreen.get(j)[0] - cameraPos[0]) * (otherIntersectionsOnScreen.get(j)[0] - cameraPos[0]))
-//                                + ((otherIntersectionsOnScreen.get(j)[1] - cameraPos[1]) * (otherIntersectionsOnScreen.get(j)[1] - cameraPos[1]))
-//                                + ((otherIntersectionsOnScreen.get(j)[2] - cameraPos[2]) * (otherIntersectionsOnScreen.get(j)[2] - cameraPos[2])));
-//                    }
-//
-//                    if(otherIntersectionsOnScreen.size() > 1){
-//                        boolean sorted;
-//                        boolean[] checks = new boolean[otherIntersectionsOnScreen.size() - 1];
-//                        Tri tempTri;
-//                        int pointer = 0;
-//                        do{
-//                            pointer++;
-//                            if(pointer == otherIntersectionsOnScreen.size()){
-//                                pointer = 0;
-//                            }
-//                            if(distancesToPoints[pointer - 1] < distancesToPoints[pointer]){
-//                                tempTri = worldTris.get(pointer - 1);
-//                                worldTris.set(pointer - 1, worldTris.get(pointer));
-//                                worldTris.set(pointer, tempTri);
-//                            }
-//                            checks[pointer - 1] = true;
-//                            sorted = true;
-//                            for (int z = 0; z < otherIntersectionsOnScreen.size() - 1; z++) {
-//                                if(!checks[z]){
-//                                    sorted = false;
-//                                    break;
-//                                }
-//                            }
-//                        }while(!sorted);
-//                    }
+
+                    /*
+                    if(i != m){
+                        for (int j = 0; j < otherPlaneIntersections.size(); j++) {
+                            oIXY = new double[2];
+                            oIntersectionDZ = distanceToScreen / otherPlaneIntersections.get(j)[2];
+                            if(oIntersectionDZ > 0){
+                                oIntersectionDZ *= -1;
+                            }
+                            for (int l = 0; l < 2; l++) {
+                                oIXY[l] = otherPlaneIntersections.get(j)[l];
+                            }
+                            oIOnScreen = new double[]{(oIXY[0] * oIntersectionDZ) + (resolutionWidth / 2.0), (oIXY[1] * oIntersectionDZ) + (resolutionHeight / 2.0), altTri.ID};
+
+                            boolean[] withinBounds;
+                            withinBounds = new boolean[]{false, false, false};
+                            int oPlus1;
+                            for (int o = 0; o < 3; o++) {
+                                oPlus1 = o + 1;
+                                if(oPlus1 >= 3){
+                                    oPlus1 -= 3;
+                                }
+                                if(inequalityGT[i][o]){
+                                    if((round(oIOnScreen[1], 4) >= round(((inequalities[i][o][0] * oIOnScreen[0]) + inequalities[i][o][1]), 4))){
+                                        withinBounds[o] = true;
+                                    }
+                                }else{
+                                    if((round(oIOnScreen[1], 4) <= round(((inequalities[i][o][0] * oIOnScreen[0]) + inequalities[i][o][1]), 4))){
+                                        withinBounds[o] = true;
+                                    }
+                                }
+                            }
+                            if((withinBounds[0] && withinBounds[1] && withinBounds[2])){
+                                otherIntersectionsOnScreen.add(oIOnScreen);
+                            }else{
+                                otherPlaneIntersections.remove(j);
+                            }
+                        }
+                    }
+
+                    double[] distancesToPoints = new double[otherIntersectionsOnScreen.size()];
+
+                    for (int j = 0; j < otherIntersectionsOnScreen.size(); j++) {
+                        distancesToPoints[j] = Math.sqrt(((otherIntersectionsOnScreen.get(j)[0] - cameraPos[0]) * (otherIntersectionsOnScreen.get(j)[0] - cameraPos[0]))
+                                + ((otherIntersectionsOnScreen.get(j)[1] - cameraPos[1]) * (otherIntersectionsOnScreen.get(j)[1] - cameraPos[1]))
+                                + ((otherIntersectionsOnScreen.get(j)[2] - cameraPos[2]) * (otherIntersectionsOnScreen.get(j)[2] - cameraPos[2])));
+                    }
+
+                    if(otherIntersectionsOnScreen.size() > 1){
+                        boolean sorted;
+                        boolean[] checks = new boolean[otherIntersectionsOnScreen.size() - 1];
+                        Tri tempTri;
+                        int pointer = 0;
+                        do{
+                            pointer++;
+                            if(pointer == otherIntersectionsOnScreen.size()){
+                                pointer = 0;
+                            }
+                            if(distancesToPoints[pointer - 1] < distancesToPoints[pointer]){
+                                tempTri = worldTris.get(pointer - 1);
+                                worldTris.set(pointer - 1, worldTris.get(pointer));
+                                worldTris.set(pointer, tempTri);
+                            }
+                            checks[pointer - 1] = true;
+                            sorted = true;
+                            for (int z = 0; z < otherIntersectionsOnScreen.size() - 1; z++) {
+                                if(!checks[z]){
+                                    sorted = false;
+                                    break;
+                                }
+                            }
+                        }while(!sorted);
+                    }
+                     */
 
                     for (int j = 0; j < intersections.size(); j++) {
 //                    intersectionsT[i][j] = rotatePoint(intersections.toArray(new double[intersections.size()][3]), new double[intersections.size()][3], j, eulerMatrix);
@@ -1874,13 +1926,26 @@ public class Main extends Application {
                 }
                 worldTris.get(i).setIntersectionPoints(intersections.toArray(new double[intersections.size()][4]));
                 worldTris.get(i).setIPointsOnScreen(intersectionsOnScreen.toArray(new double[intersectionsOnScreen.size()][3]));
-            }
+//            }
         }
     }
+
+    /**
+     * A very simple utility method which rounds the given double to the given number of decimal places.
+     * @param value The value to be rounded
+     * @param DP The number of decimal places to round to
+     * @return The rounded value
+     */
 
     public static double round(double value, int DP){
         return Math.round(value * (10 ^ DP)) / (double) (10 ^ DP);
     }
+
+    /**
+     * Another utility method returning the euler matrix of the current camera angle, solely used in rotating the
+     * world geometry around the user.
+     * @return The euler matrix
+     */
 
     public static double[][] eulerAngleCalc(){
         double yaw = -cameraAngle[0];
@@ -1919,12 +1984,20 @@ public class Main extends Application {
         return multiplyMatrices(m2, mA);
     }
 
-    public static double[] rotatePoint(double[][] coords,double[][] coordsM, int j, double[][] m3){
+    /**
+     * A specialised method in rotating a given array of points.
+     * @param coords Two dimensional array of points of a world triangle
+     * @param coordsM The offset of said points if they had been moved by the user
+     * @param m3 The euler matrix fetched before the point translation
+     * @return The resultant translated coordinates
+     */
+
+    public static double[] rotatePoint(double[] coords,double[] coordsM, double[][] m3){
         double[] coordsTranslated;
 
-        double px = coords[j][0] - cameraPos[0] + coordsM[j][0];
-        double py = coords[j][1] - cameraPos[1] + coordsM[j][1];
-        double pz = coords[j][2] - cameraPos[2] + coordsM[j][2];
+        double px = coords[0] - cameraPos[0] + coordsM[0];
+        double py = coords[1] - cameraPos[1] + coordsM[1];
+        double pz = coords[2] - cameraPos[2] + coordsM[2];
 
         coordsTranslated = new double[3];
         double a = m3[0][0];
@@ -1943,6 +2016,11 @@ public class Main extends Application {
 
         return coordsTranslated;
     }
+
+    /**
+     * A bubble sort of the dynamic array containing all world geometry details by their distances to the camera.
+     * Used to draw closer shapes in front of further shapes to have the world viewed correctly.
+     */
 
     public static void sortWorld(){
         boolean sorted;
@@ -1996,6 +2074,13 @@ public class Main extends Application {
         }while(!sortedT);
     }
 
+    /**
+     * Utility method used for the specialised way to multiply two matrices.
+     * @param m1 Matrix 1
+     * @param m2 Matrix 2
+     * @return The product of matrix 1 and 2
+     */
+
     public static double[][] multiplyMatrices(double[][] m1, double[][] m2){
         double[][] result = new double[m1.length][m2[0].length];
 
@@ -2008,6 +2093,15 @@ public class Main extends Application {
         return result;
     }
 
+    /**
+     * A small method solely used in conjunction in the multiplyMatrices method to multiply the correct row and column of two matrices.
+     * @param m1 Matrix 1
+     * @param m2 Matrix 2
+     * @param row The row of matrix 1 to be used
+     * @param col The column of matrix 2 to be used
+     * @return The result of multiplying the specified row and column
+     */
+
     public static double multiplyMatricesCell(double[][] m1, double[][] m2, int row, int col){
         double cell = 0;
 
@@ -2018,17 +2112,39 @@ public class Main extends Application {
         return cell;
     }
 
+    /**
+     * A short method called upon a key press and adds it to the bit set of pressed keys.
+     * @param e The KeyEvent called
+     */
+
     private void keyPressed(KeyEvent e){
         int keyCode = e.getCode().hashCode();
         keysPressed.set(keyCode);
     }
+
+    /**
+     * A short method called upon a key released and removes it from the bit set instead.
+     * @param e The KeyEvent called
+     */
 
     private void keyReleased(KeyEvent e){
         int keyCode = e.getCode().hashCode();
         keysPressed.clear(keyCode);
     }
 
+    /**
+     * When the mouse is moved in the game scene, this method is called to process the mouse movement and change the camera angles appropriately.
+     * If the mouse is not currently within the game window bounds, this mouse movement is not processed.
+     * @param e The MouseEvent called
+     * @param stage The JavaFX stage to determine if the mouse is in bounds or not
+     */
+
     private void mouseMoved(MouseEvent e, Stage stage){
+        /*
+         * Since the MouseEvent returns the cursor's position relative to the whole screen,
+         * not just the game window, this boolean is made to check if it is indeed in the game window.
+         */
+
         mouseInBounds = (e.getScreenX() > stage.getX() && e.getScreenX() < stage.getX() + resolutionWidth)
                 && (e.getScreenY() > stage.getY() && e.getScreenY() < stage.getY() + resolutionHeight + 11);
 
@@ -2059,47 +2175,66 @@ public class Main extends Application {
         }
     }
 
+    /**
+     * This method is continuously called along with the render method and evaluates the bit set of keys pressed,
+     * moving the player in the appropriate direction.
+     * Trigonometry is used to correctly move the player if they are facing diagonally.
+     */
+
     private void checkKeys(){
         double cosX = Math.cos(Math.toRadians(cameraAngle[0]));
         double sinX = Math.sin(Math.toRadians(cameraAngle[0]));
         double nCosX = Math.cos(Math.toRadians(-cameraAngle[0]));
         double nSinX = Math.sin(Math.toRadians(-cameraAngle[0]));
 
+        //Forwards
         if(keysPressed.get(KeyCode.UP.hashCode())){
             cameraDeltaUpDown[2] = -moveSpeed * cosX;
             cameraDeltaUpDown[0] = -moveSpeed * sinX;
         }
+        //Backwards
         if(keysPressed.get(KeyCode.DOWN.hashCode())){
             cameraDeltaUpDown[2] = moveSpeed * cosX;
             cameraDeltaUpDown[0] = moveSpeed * sinX;
         }
+        //Left
         if(keysPressed.get(KeyCode.LEFT.hashCode())){
             cameraDeltaLeftRight[0] = moveSpeed * nCosX;
             cameraDeltaLeftRight[2] = moveSpeed * nSinX;
         }
+        //Right
         if(keysPressed.get(KeyCode.RIGHT.hashCode())){
             cameraDeltaLeftRight[0] = -moveSpeed * nCosX;
             cameraDeltaLeftRight[2] = -moveSpeed * nSinX;
         }
 
+        // Limit the players movement if it is above the allowed movement speed.
         if(cameraDeltaUpDown[0] > moveSpeed){
             cameraDeltaUpDown[0] = moveSpeed;
         }else if(cameraDeltaUpDown[0] < -moveSpeed){
             cameraDeltaUpDown[0] = -moveSpeed;
         }
-
         if(cameraDeltaUpDown[2] > moveSpeed){
             cameraDeltaUpDown[2] = moveSpeed;
         }else if(cameraDeltaUpDown[2] < -moveSpeed){
             cameraDeltaUpDown[2] = -moveSpeed;
         }
+
+        //Up
         if(keysPressed.get(KeyCode.SPACE.hashCode())){
             cameraDeltaUpDown[1] = moveSpeed;
         }
+
+        //Down
         if(keysPressed.get(KeyCode.SHIFT.hashCode())){
             cameraDeltaUpDown[1] = -moveSpeed;
         }
     }
+
+    /**
+     * Another method continuously called, its purpose is to gradually slow the player down
+     * and move the player by the amounts specified by the checkKeys method.
+     */
 
     private static void cycleMovement(){
         for (int i = 0; i < 3; i++) {
@@ -2108,6 +2243,12 @@ public class Main extends Application {
             cameraPos[i] += cameraDeltaUpDown[i] + cameraDeltaLeftRight[i];
         }
     }
+
+    /**
+     * Only used by the mouseMoved method, it simply uses a Java AWT robot to move the cursor to
+     * the middle of the screen when it is within the game window and the game is not paused.
+     * @param stage The game stage used to judge where the game window's centre is
+     */
 
     private void gameMouse(Stage stage){
         double x = stage.getX();
@@ -2122,6 +2263,10 @@ public class Main extends Application {
         }
     }
 }
+
+/**
+ * A custom object only used to draw the editing arrows, previously used to draw all world elements.
+ */
 
 class Quad{
 
@@ -2154,6 +2299,7 @@ class Quad{
         hidden = h;
     }
 
+    // Many methods merely used to set certain variables within this object.
     public void setPointsScreen(double[][] newPoints){
         pointsOnScreen = newPoints;
     }
@@ -2178,6 +2324,11 @@ class Quad{
         colour = newColour;
     }
 }
+
+/**
+ * An object which is used similarly to the Quad object, only supporting three points and not four.
+ * This object is used to draw the world elements instead of the Quad object so they can be observed correctly.
+ */
 
 class Tri{
 
@@ -2226,6 +2377,7 @@ class Tri{
         overLapping = 0;
     }
 
+    // Many methods again merely used to set certain variables within this object.
     public void setPointsScreen(double[][] newPoints){
         pointsOnScreen = newPoints;
     }
@@ -2275,6 +2427,10 @@ class Tri{
     }
 }
 
+/**
+ * A custom object which was meant to be used further on in development in order to render higher definition elements.
+ */
+
 class Object{
 
     protected int ID;
@@ -2292,6 +2448,7 @@ class Object{
         vertices = v;
     }
 
+    // Many methods again merely used to set certain variables within this object.
     public void setVerticesScreen(double[][] newVertices){
         verticesOnScreen = newVertices;
     }
@@ -2305,21 +2462,24 @@ class Object{
     }
 }
 
+/**
+ * A custom object storing the details of light elements in the world.
+ */
+
 class Light{
 
     protected int ID;
     protected double[] pos;
     protected double[] posOnScreen;
     protected double brightness;
-    protected Color colour;
 
-    public Light(int Id, double[] p, double b, Color c){
+    public Light(int Id, double[] p, double b){
         ID = Id;
         pos = p;
         brightness = b;
-        colour = c;
     }
 
+    // Many methods again merely used to set certain variables within this object.
     public void setPosScreen(double[] newScreenPos){
         posOnScreen = newScreenPos;
     }
@@ -2327,11 +2487,11 @@ class Light{
     public void setBrightness(double newBrightness){
         brightness = newBrightness;
     }
-
-    public void setColour(Color newColour){
-        colour = newColour;
-    }
 }
+
+/**
+ * A custom object again, this time used in creating the GUI. It contains all variables to do with its animations.
+ */
 
 class CustomImage {
 
@@ -2376,6 +2536,7 @@ class CustomImage {
         enabled = true;
     }
 
+    // Animation methods designed to be continuously called to create an animation
     public void changeImage(Image newImage){
         image = newImage;
         imageView.setImage(newImage);
@@ -2463,6 +2624,11 @@ class CustomImage {
         }
     }
 }
+
+/**
+ * Another custom object only used in GUI, this object is similar to the CustomImage class, only supporting a JavaFX text object instead of an image and ImageView.
+ */
+
 class CustomText{
 
     protected String string;
@@ -2478,6 +2644,7 @@ class CustomText{
         distance = d;
     }
 
+    // Animation methods again designed to be continuously called to create an animation
     public void enterAnim(){
         if(theta < 90){
             transitioning = true;
@@ -2500,6 +2667,12 @@ class CustomText{
         }
     }
 }
+
+/**
+ * The final custom object, used in GUI in the map select menu. It is similar to the CustomImage class,
+ * only it features a map icon, title, description, and background all contained within a JavaFX Group.
+ */
+
 class ListMap{
 
     protected String title;
@@ -2589,6 +2762,7 @@ class ListMap{
         }
     }
 
+    // Animation methods again designed to be continuously called to create an animation
     public void exitAnim(){
         if(theta1 > 0){
             transitioning = true;
@@ -2600,6 +2774,10 @@ class ListMap{
         }
     }
 
+    /*
+     * The series of 'page' methods are currently not used, but would have been used to create an animation when the user scrolls between map pages.
+     * Currently scrolling between pages is not supported.
+     */
     public void pageInFromLeft(){
         if(theta3 < 90){
             theta3 += Main.buttonSpeed;

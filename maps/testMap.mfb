@@ -1,3 +1,6 @@
+<Title> Test map
+<Description> Test
+<Icon Path> maps/icons/icon.png
 <World>{
     > Format [x1,y1,z1/x2,y2,z2/x3,y3,z3/x4,y4,z4¦red,green,blue]
 	[-2,-2,-10/2,-2,-10/2,-2,-14/-2,-2,-14¦43,201,201]
@@ -45,6 +48,6 @@
     [0,0.2,0/-0.2,-0.2,0.2/0.2,-0.2,0.2/0.2,-0.2,-0.2/-0.2,-0.2,-0.2¦0,-0.3,0]
 }
 <Lights>{
-    > Format [x,y,z/brightness/red,green,blue]
-    [0,0.4,0/2/255,255,255]
+    > Format [x,y,z/brightness]
+    [0,1.9,-14/2]
 }
